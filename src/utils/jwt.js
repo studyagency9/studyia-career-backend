@@ -7,7 +7,7 @@ dotenv.config();
 exports.generateAccessToken = (user, role) => {
   return jwt.sign(
     {
-      sub: user.id,
+      sub: user._id || user.id, // Utiliser _id s'il existe, sinon id
       email: user.email,
       role: role
     },

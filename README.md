@@ -10,6 +10,7 @@ API Backend pour la plateforme Studyia Career CV Builder, développée avec Node
 - [Endpoints API](#endpoints-api)
 - [Démarrage](#démarrage)
 - [Variables d'environnement](#variables-denvironnement)
+- [Déploiement sur Render](#déploiement-sur-render)
 - [Modèles de données](#modèles-de-données)
 - [Authentification](#authentification)
 - [Gestion des CV](#gestion-des-cv)
@@ -185,6 +186,62 @@ OPENROUTER_API_KEY=votre_clé_api_ici
 # URL Frontend
 FRONTEND_URL=http://localhost:5173
 ```
+
+## 🚀 Déploiement sur Render
+
+Ce projet est configuré pour être facilement déployé sur Render.
+
+### Méthode 1: Déploiement manuel
+
+1. Créez un compte sur [Render](https://render.com) si vous n'en avez pas déjà un
+2. Depuis le tableau de bord, cliquez sur "New" puis "Web Service"
+3. Connectez votre dépôt GitHub ou utilisez l'URL: `https://github.com/studyagency9/studyia-career-backend.git`
+4. Configurez le service avec les paramètres suivants:
+   - **Name**: studyia-career-backend (ou le nom de votre choix)
+   - **Environment**: Node
+   - **Build Command**: `npm install`
+   - **Start Command**: `npm start`
+   - **Health Check Path**: `/health`
+
+5. Dans la section "Environment Variables", ajoutez toutes les variables d'environnement nécessaires:
+   - `NODE_ENV`: production
+   - `PORT`: 10000 (Render utilise cette valeur en interne)
+   - `MONGODB_URI`: votre URI MongoDB
+   - `JWT_SECRET`: votre clé secrète JWT
+   - `JWT_EXPIRES_IN`: 1h
+   - `REFRESH_TOKEN_EXPIRES_IN`: 7d
+   - `OPENROUTER_API_KEY`: votre clé API OpenRouter
+   - `FRONTEND_URL`: URL de votre frontend déployé
+
+6. Cliquez sur "Create Web Service" pour lancer le déploiement
+
+### Méthode 2: Déploiement avec Blueprint
+
+Ce projet inclut un fichier `render.yaml` qui permet un déploiement automatisé:
+
+1. Accédez à https://dashboard.render.com/blueprints
+2. Cliquez sur "New Blueprint Instance"
+3. Connectez votre dépôt GitHub
+4. Render détectera automatiquement le fichier `render.yaml` et configurera le service
+5. Vous devrez ajouter manuellement les variables d'environnement sensibles (MONGODB_URI, JWT_SECRET, etc.)
+
+### Post-déploiement
+
+Un script post-déploiement est configuré pour exécuter automatiquement:
+- La création des administrateurs par défaut
+- La génération de la documentation Swagger
+
+Vous pouvez également exécuter manuellement ces tâches après le déploiement:
+
+```bash
+npm run post-deploy
+```
+
+### Accès à l'API déployée
+
+Une fois le déploiement terminé, votre API sera accessible à l'URL fournie par Render:
+- Documentation Swagger: `https://votre-url.onrender.com/api-docs`
+- Vérification de santé: `https://votre-url.onrender.com/health`
 
 ## 📊 Modèles de données
 

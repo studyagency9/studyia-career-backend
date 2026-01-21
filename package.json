@@ -8,6 +8,7 @@
     "dev": "nodemon src/server.js",
     "create-admins": "node src/scripts/create-admins.js",
     "swagger": "node src/swagger/combine-swagger.js",
+    "post-deploy": "node src/scripts/post-deploy.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [

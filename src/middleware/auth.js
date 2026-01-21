@@ -158,7 +158,7 @@ exports.authenticateAssociate = async (req, res, next) => {
       });
     }
     
-    const associate = await Associate.findById(decoded.id);
+    const associate = await Associate.findById(decoded.sub);
     
     if (!associate) {
       return res.status(401).json({ 
@@ -174,12 +174,7 @@ exports.authenticateAssociate = async (req, res, next) => {
       });
     }
     
-    req.associate = {
-      id: associate._id,
-      email: associate.email,
-      firstName: associate.firstName,
-      lastName: associate.lastName
-    };
+    req.associate = associate;
     next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {

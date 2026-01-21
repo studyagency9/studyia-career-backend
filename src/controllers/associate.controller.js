@@ -1,5 +1,5 @@
 const { Associate, Payment } = require('../models/mongodb');
-const jwt = require('jsonwebtoken');
+const { generateAccessToken } = require('../utils/jwt');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const dotenv = require('dotenv');
@@ -111,11 +111,7 @@ exports.login = async (req, res) => {
     }
 
     // Générer le token JWT
-    const token = jwt.sign(
-      { id: associate._id, role: 'associate' },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN }
-    );
+    const token = generateAccessToken(associate, 'associate');
 
     return res.status(200).json({
       success: true,

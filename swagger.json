@@ -1,0 +1,473 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Studyia Career Backend API",
+    "description": "API Backend pour la plateforme Studyia Career CV Builder",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Studyia Team"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000/api",
+      "description": "Serveur de développement"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Auth",
+      "description": "Authentification des partenaires"
+    },
+    {
+      "name": "CV",
+      "description": "Gestion des CV"
+    },
+    {
+      "name": "Profile",
+      "description": "Gestion des profils partenaires"
+    },
+    {
+      "name": "Plan",
+      "description": "Gestion des forfaits"
+    },
+    {
+      "name": "AI",
+      "description": "Analyse et optimisation IA"
+    },
+    {
+      "name": "Admin",
+      "description": "Administration"
+    },
+    {
+      "name": "Admin Users",
+      "description": "Gestion des administrateurs"
+    },
+    {
+      "name": "Associate",
+      "description": "Gestion des associés"
+    },
+    {
+      "name": "Payment",
+      "description": "Gestion des paiements"
+    },
+    {
+      "name": "Personnel",
+      "description": "Gestion du personnel"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "Partner": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "company": {
+            "type": "string"
+          },
+          "plan": {
+            "type": "string",
+            "enum": ["starter", "pro", "business"]
+          },
+          "cvUsedThisMonth": {
+            "type": "integer"
+          },
+          "planRenewalDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["active", "suspended"]
+          },
+          "cvHistory": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "cvId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "pdfUrl": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CV": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "partnerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string",
+            "enum": ["fr", "en"]
+          },
+          "data": {
+            "type": "object"
+          },
+          "pdfUrl": {
+            "type": "string"
+          },
+          "referralCode": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Plan": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["starter", "pro", "business"]
+          },
+          "name": {
+            "type": "string"
+          },
+          "monthlyQuota": {
+            "type": "integer"
+          },
+          "price": {
+            "type": "number"
+          },
+          "pricePerDay": {
+            "type": "number"
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "badge": {
+            "type": "string"
+          },
+          "recommended": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Admin": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": ["admin", "superadmin", "comptable", "secretaire"]
+          },
+          "lastLogin": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Associate": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "referralCode": {
+            "type": "string"
+          },
+          "referralLink": {
+            "type": "string"
+          },
+          "referralStats": {
+            "type": "object",
+            "properties": {
+              "totalCVs": {
+                "type": "integer"
+              },
+              "cvsByMonth": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "totalSales": {
+            "type": "number"
+          },
+          "totalCommission": {
+            "type": "number"
+          },
+          "availableBalance": {
+            "type": "number"
+          },
+          "withdrawnAmount": {
+            "type": "number"
+          },
+          "withdrawalHistory": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "amount": {
+                  "type": "number"
+                },
+                "fee": {
+                  "type": "number"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": ["pending", "completed", "rejected"]
+                },
+                "requestDate": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "completionDate": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "paymentMethod": {
+                  "type": "string"
+                },
+                "transactionId": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": ["active", "suspended", "banned"]
+          },
+          "isVerified": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Payment": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "partnerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "associateId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "fee": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["cv_purchase", "partner_subscription", "associate_commission", "withdrawal"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "completed", "failed", "refunded"]
+          },
+          "paymentMethod": {
+            "type": "string",
+            "enum": ["card", "mobile_money", "bank_transfer"]
+          },
+          "transactionId": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "processedBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "processedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Personnel": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "dateOfBirth": {
+            "type": "string",
+            "format": "date"
+          },
+          "gender": {
+            "type": "string",
+            "enum": ["M", "F"]
+          },
+          "phoneNumber": {
+            "type": "string"
+          },
+          "position": {
+            "type": "string"
+          },
+          "cvId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cvPdfUrl": {
+            "type": "string"
+          },
+          "additionalInfo": {
+            "type": "object",
+            "properties": {
+              "email": {
+                "type": "string",
+                "format": "email"
+              },
+              "address": {
+                "type": "string"
+              },
+              "education": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "experience": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  }
+}

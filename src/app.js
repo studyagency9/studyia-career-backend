@@ -1,0 +1,104 @@
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const dotenv = require('dotenv');
+const swaggerUi = require('swagger-ui-express');
+const fs = require('fs');
+const path = require('path');
+const { connectDB } = require('./config/database');
+const errorHandler = require('./middleware/error');
+const { apiLimiter } = require('./middleware/rateLimiter');
+const { initDefaultPlans } = require('./controllers/plan.controller');
+
+// Import routes
+const authRoutes = require('./routes/auth.routes');
+const cvRoutes = require('./routes/cv.routes');
+const profileRoutes = require('./routes/profile.routes');
+const planRoutes = require('./routes/plan.routes');
+const aiRoutes = require('./routes/ai.routes');
+const adminRoutes = require('./routes/admin.routes');
+const personnelRoutes = require('./routes/personnel.routes');
+const adminManagementRoutes = require('./routes/admin-management.routes');
+
+// Load environment variables
+dotenv.config();
+
+// Initialize express app
+const app = express();
+
+// Middleware
+app.use(helmet()); // Security headers
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  credentials: true
+}));
+app.use(express.json()); // Parse JSON bodies
+app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
+
+// Apply rate limiting to all API routes
+app.use('/api', apiLimiter);
+
+// Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/cvs', cvRoutes);
+app.use('/api/profile', profileRoutes);
+app.use('/api/plans', planRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/personnel', personnelRoutes);
+app.use('/api/admin/users', adminManagementRoutes);
+
+// Health check route
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
+// Swagger documentation
+let swaggerDocument;
+try {
+  swaggerDocument = require('../swagger-combined.json');
+} catch (err) {
+  // Si le fichier combiné n'existe pas, utiliser le fichier de base
+  try {
+    swaggerDocument = require('../swagger.json');
+  } catch (err) {
+    console.warn('Swagger documentation not available');
+    swaggerDocument = { info: { title: 'API Documentation', version: '1.0.0' } };
+  }
+}
+
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
+  explorer: true,
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'Studyia Career API Documentation'
+}));
+
+// Error handling middleware
+app.use(errorHandler);
+
+// Database initialization and server startup
+const PORT = process.env.PORT || 3000;
+
+const startServer = async () => {
+  try {
+    // Connecter à MongoDB
+    await connectDB();
+    console.log('MongoDB connecté avec succès');
+    
+    // Initialiser les plans par défaut
+    if (process.env.NODE_ENV === 'development') {
+      await initDefaultPlans();
+    }
+    
+    // Démarrer le serveur
+    app.listen(PORT, () => {
+      console.log(`Serveur démarré sur le port ${PORT}`);
+    });
+  } catch (error) {
+    console.error('Impossible de se connecter à la base de données ou de démarrer le serveur:', error);
+    process.exit(1);
+  }
+};
+
+// Export for testing
+module.exports = { app, startServer };

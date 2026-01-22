@@ -32,9 +32,13 @@ app.use(helmet()); // Security headers
 app.use(cors({
   origin: '*', // Accepter les requêtes de toutes les sources
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: '*', // Autoriser tous les en-têtes personnalisés
+  exposedHeaders: ['Content-Length', 'Content-Type']
 }));
+
+// Middleware pour gérer les requêtes OPTIONS préflight
+app.options('*', cors());
 app.use(express.json()); // Parse JSON bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 

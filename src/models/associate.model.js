@@ -59,7 +59,7 @@ const salesHistorySchema = new mongoose.Schema({
     enum: ['pending', 'validated', 'rejected'],
     default: 'pending'
   }
-}, { _id: false });
+});
 
 // Schéma pour les statistiques de parrainage
 const referralStatsSchema = new mongoose.Schema({

@@ -705,8 +705,8 @@ exports.getSalesHistory = async (req, res) => {
     return res.status(200).json({
       success: true,
       data: {
-        sales: paginatedSales.map(sale => ({
-          id: sale._id,
+        sales: paginatedSales.map((sale, index) => ({
+          id: sale._id || `temp-${index}`,
           cvId: sale.cvId,
           clientName: sale.clientName,
           clientEmail: sale.clientEmail,
@@ -765,8 +765,8 @@ exports.getRecentSales = async (req, res) => {
     return res.status(200).json({
       success: true,
       data: {
-        sales: recentSales.map(sale => ({
-          id: sale._id,
+        sales: recentSales.map((sale, index) => ({
+          id: sale._id || `temp-${index}`,
           cvId: sale.cvId,
           clientName: sale.clientName,
           clientEmail: sale.clientEmail,

@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const { connectDB } = require('./config/database');
 const errorHandler = require('./middleware/error');
-const { apiLimiter } = require('./middleware/rateLimiter');
+const { apiLimiter, associateLimiter } = require('./middleware/rateLimiter');
 const { initDefaultPlans } = require('./controllers/plan.controller');
 
 // Import routes
@@ -41,19 +41,18 @@ app.use(cors({
 app.use(express.json()); // Parse JSON bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 
-// Apply rate limiting to all API routes
-app.use('/api', apiLimiter);
+// Apply rate limiting to specific routes
+app.use('/api/auth', apiLimiter, authRoutes);
+app.use('/api/cvs', apiLimiter, cvRoutes);
+app.use('/api/profile', apiLimiter, profileRoutes);
+app.use('/api/plans', apiLimiter, planRoutes);
+app.use('/api/ai', apiLimiter, aiRoutes);
+app.use('/api/admin', apiLimiter, adminRoutes);
+app.use('/api/personnel', apiLimiter, personnelRoutes);
+app.use('/api/admin/users', apiLimiter, adminManagementRoutes);
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/cvs', cvRoutes);
-app.use('/api/profile', profileRoutes);
-app.use('/api/plans', planRoutes);
-app.use('/api/ai', aiRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/personnel', personnelRoutes);
-app.use('/api/admin/users', adminManagementRoutes);
-app.use('/api/associates', associateRoutes);
+// Apply specific rate limiter for associates routes
+app.use('/api/associates', associateLimiter, associateRoutes);
 
 // Health check route
 app.get('/health', (req, res) => {

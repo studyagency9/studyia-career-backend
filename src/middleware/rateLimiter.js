@@ -15,7 +15,19 @@ exports.authLimiter = rateLimit({
 // Rate limiter for API endpoints
 exports.apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // 100 requests per user
+  max: 200, // Augmenté à 200 requests per user
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: 'Too many requests. Please try again later.'
+  }
+});
+
+// Rate limiter spécifique pour les routes des associés
+exports.associateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 300, // 300 requests per user
   standardHeaders: true,
   legacyHeaders: false,
   message: {

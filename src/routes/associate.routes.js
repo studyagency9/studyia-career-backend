@@ -2,10 +2,11 @@ const express = require('express');
 const router = express.Router();
 const associateController = require('../controllers/associate.controller');
 const { authenticateAssociate } = require('../middleware/auth');
+const { associateAuthLimiter } = require('../middleware/rateLimiter');
 
 // Routes publiques
-router.post('/signup', associateController.signup);
-router.post('/login', associateController.login);
+router.post('/signup', associateAuthLimiter, associateController.signup);
+router.post('/login', associateAuthLimiter, associateController.login);
 
 // Routes protégées (nécessitent authentification)
 router.get('/dashboard', authenticateAssociate, associateController.getDashboard);

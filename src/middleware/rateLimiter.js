@@ -12,6 +12,18 @@ exports.authLimiter = rateLimit({
   }
 });
 
+// Rate limiter spécifique pour l'authentification des associés
+exports.associateAuthLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // 20 requests per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: 'Trop de tentatives de connexion. Veuillez patienter quelques instants avant de réessayer.'
+  }
+});
+
 // Rate limiter for API endpoints
 exports.apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes

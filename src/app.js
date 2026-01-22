@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const { connectDB } = require('./config/database');
 const errorHandler = require('./middleware/error');
-const { apiLimiter, associateLimiter } = require('./middleware/rateLimiter');
+const { apiLimiter, associateLimiter, associateAuthLimiter } = require('./middleware/rateLimiter');
 const { initDefaultPlans } = require('./controllers/plan.controller');
 
 // Import routes

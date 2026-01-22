@@ -16,4 +16,13 @@ router.get('/profile', authenticateAssociate, associateController.getProfile);
 router.put('/profile', authenticateAssociate, associateController.updateProfile);
 router.put('/password', authenticateAssociate, associateController.changePassword);
 
+// Nouvelles routes pour les statistiques temporelles
+router.get('/stats/daily', authenticateAssociate, associateController.getDailyStats);
+router.get('/stats/weekly', authenticateAssociate, associateController.getWeeklyStats);
+router.get('/stats/monthly', authenticateAssociate, associateController.getMonthlyStats);
+
+// Nouvelles routes pour l'historique des ventes
+router.get('/sales', authenticateAssociate, associateController.getSalesHistory);
+router.get('/sales/recent', authenticateAssociate, associateController.getRecentSales);
+
 module.exports = router;

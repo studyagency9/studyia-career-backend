@@ -512,3 +512,276 @@ exports.changePassword = async (req, res) => {
     });
   }
 };
+
+// Récupérer les statistiques quotidiennes
+exports.getDailyStats = async (req, res) => {
+  try {
+    const associateId = req.associate._id;
+    const associate = req.associate;
+
+    if (!associate) {
+      return res.status(404).json({
+        success: false,
+        error: 'Associé non trouvé'
+      });
+    }
+
+    // Obtenir la date d'aujourd'hui au format YYYY-MM-DD
+    const today = new Date();
+    const todayKey = today.toISOString().split('T')[0];
+
+    // Récupérer les ventes du jour
+    const todaySales = associate.referralStats.salesByDay.get(todayKey) || 0;
+    
+    // Calculer les commissions du jour (en se basant sur les ventes enregistrées aujourd'hui)
+    const todayCommissions = associate.salesHistory
+      .filter(sale => {
+        const saleDate = new Date(sale.date);
+        return saleDate.toISOString().split('T')[0] === todayKey;
+      })
+      .reduce((total, sale) => total + sale.commission, 0);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        date: todayKey,
+        sales: todaySales,
+        commissions: todayCommissions
+      }
+    });
+  } catch (error) {
+    console.error('Erreur lors de la récupération des statistiques quotidiennes:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erreur serveur lors de la récupération des statistiques quotidiennes'
+    });
+  }
+};
+
+// Récupérer les statistiques hebdomadaires
+exports.getWeeklyStats = async (req, res) => {
+  try {
+    const associateId = req.associate._id;
+    const associate = req.associate;
+
+    if (!associate) {
+      return res.status(404).json({
+        success: false,
+        error: 'Associé non trouvé'
+      });
+    }
+
+    // Obtenir la semaine actuelle (année + numéro de semaine)
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay()); // Dimanche de la semaine actuelle
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6); // Samedi de la semaine actuelle
+    endOfWeek.setHours(23, 59, 59, 999);
+
+    const weekKey = `${now.getFullYear()}-W${Math.ceil((now.getDate() + now.getDay()) / 7)}`;
+
+    // Récupérer les ventes de la semaine
+    const weeklySales = associate.referralStats.salesByWeek.get(weekKey) || 0;
+    
+    // Calculer les commissions de la semaine
+    const weeklyCommissions = associate.salesHistory
+      .filter(sale => {
+        const saleDate = new Date(sale.date);
+        return saleDate >= startOfWeek && saleDate <= endOfWeek;
+      })
+      .reduce((total, sale) => total + sale.commission, 0);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        week: weekKey,
+        startDate: startOfWeek.toISOString().split('T')[0],
+        endDate: endOfWeek.toISOString().split('T')[0],
+        sales: weeklySales,
+        commissions: weeklyCommissions
+      }
+    });
+  } catch (error) {
+    console.error('Erreur lors de la récupération des statistiques hebdomadaires:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erreur serveur lors de la récupération des statistiques hebdomadaires'
+    });
+  }
+};
+
+// Récupérer les statistiques mensuelles
+exports.getMonthlyStats = async (req, res) => {
+  try {
+    const associateId = req.associate._id;
+    const associate = req.associate;
+
+    if (!associate) {
+      return res.status(404).json({
+        success: false,
+        error: 'Associé non trouvé'
+      });
+    }
+
+    // Obtenir le mois actuel au format YYYY-MM
+    const now = new Date();
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    // Récupérer les ventes du mois
+    const monthlySales = associate.referralStats.salesByMonth.get(monthKey) || 0;
+    const monthlyCVs = associate.referralStats.cvsByMonth.get(monthKey) || 0;
+    
+    // Calculer les commissions du mois
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    
+    const monthlyCommissions = associate.salesHistory
+      .filter(sale => {
+        const saleDate = new Date(sale.date);
+        return saleDate >= startOfMonth && saleDate <= endOfMonth;
+      })
+      .reduce((total, sale) => total + sale.commission, 0);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        month: monthKey,
+        sales: monthlySales,
+        cvs: monthlyCVs,
+        commissions: monthlyCommissions
+      }
+    });
+  } catch (error) {
+    console.error('Erreur lors de la récupération des statistiques mensuelles:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erreur serveur lors de la récupération des statistiques mensuelles'
+    });
+  }
+};
+
+// Récupérer l'historique des ventes avec filtrage
+exports.getSalesHistory = async (req, res) => {
+  try {
+    const associateId = req.associate._id;
+    const associate = req.associate;
+    const { status, search, page = 1, limit = 10 } = req.query;
+
+    if (!associate) {
+      return res.status(404).json({
+        success: false,
+        error: 'Associé non trouvé'
+      });
+    }
+
+    // Filtrer les ventes selon les paramètres
+    let filteredSales = [...associate.salesHistory];
+    
+    // Filtrer par statut si spécifié
+    if (status && ['pending', 'validated', 'rejected'].includes(status)) {
+      filteredSales = filteredSales.filter(sale => sale.status === status);
+    }
+    
+    // Filtrer par recherche si spécifiée (nom ou email du client)
+    if (search) {
+      const searchLower = search.toLowerCase();
+      filteredSales = filteredSales.filter(sale => 
+        (sale.clientName && sale.clientName.toLowerCase().includes(searchLower)) ||
+        (sale.clientEmail && sale.clientEmail.toLowerCase().includes(searchLower))
+      );
+    }
+    
+    // Trier par date (plus récent d'abord)
+    filteredSales.sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    // Pagination
+    const offset = (page - 1) * limit;
+    const paginatedSales = filteredSales.slice(offset, offset + parseInt(limit));
+    const total = filteredSales.length;
+    
+    return res.status(200).json({
+      success: true,
+      data: {
+        sales: paginatedSales.map(sale => ({
+          id: sale._id,
+          cvId: sale.cvId,
+          clientName: sale.clientName,
+          clientEmail: sale.clientEmail,
+          amount: sale.amount,
+          commission: sale.commission,
+          date: sale.date,
+          status: sale.status
+        })),
+        pagination: {
+          total,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          pages: Math.ceil(total / limit)
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Erreur lors de la récupération de l\'historique des ventes:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erreur serveur lors de la récupération de l\'historique des ventes'
+    });
+  }
+};
+
+// Récupérer les ventes récentes (les 5 dernières)
+exports.getRecentSales = async (req, res) => {
+  try {
+    const associateId = req.associate._id;
+    const associate = req.associate;
+    const { limit = 5 } = req.query;
+
+    if (!associate) {
+      return res.status(404).json({
+        success: false,
+        error: 'Associé non trouvé'
+      });
+    }
+
+    // Récupérer les ventes et les trier par date (plus récent d'abord)
+    const recentSales = [...associate.salesHistory]
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .slice(0, parseInt(limit));
+    
+    // Vérifier s'il y a des ventes
+    if (recentSales.length === 0) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          sales: [],
+          message: 'Aucune vente récente'
+        }
+      });
+    }
+    
+    return res.status(200).json({
+      success: true,
+      data: {
+        sales: recentSales.map(sale => ({
+          id: sale._id,
+          cvId: sale.cvId,
+          clientName: sale.clientName,
+          clientEmail: sale.clientEmail,
+          amount: sale.amount,
+          commission: sale.commission,
+          date: sale.date,
+          status: sale.status
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('Erreur lors de la récupération des ventes récentes:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erreur serveur lors de la récupération des ventes récentes'
+    });
+  }
+};

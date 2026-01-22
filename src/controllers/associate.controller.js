@@ -139,10 +139,10 @@ exports.login = async (req, res) => {
 // Récupérer le tableau de bord de l'associé
 exports.getDashboard = async (req, res) => {
   try {
-    const associateId = req.associate.id;
+    const associateId = req.associate._id;
 
     // Récupérer l'associé avec toutes ses informations
-    const associate = await Associate.findById(associateId);
+    const associate = req.associate;
     if (!associate) {
       return res.status(404).json({
         success: false,
@@ -194,11 +194,11 @@ exports.getDashboard = async (req, res) => {
 // Récupérer les statistiques de parrainage
 exports.getReferralStats = async (req, res) => {
   try {
-    const associateId = req.associate.id;
+    const associateId = req.associate._id;
     const { period = '6months' } = req.query;
 
     // Récupérer l'associé
-    const associate = await Associate.findById(associateId);
+    const associate = req.associate;
     if (!associate) {
       return res.status(404).json({
         success: false,
@@ -251,7 +251,7 @@ exports.getReferralStats = async (req, res) => {
 // Demander un retrait de fonds
 exports.requestWithdrawal = async (req, res) => {
   try {
-    const associateId = req.associate.id;
+    const associateId = req.associate._id;
     const { amount, paymentMethod } = req.body;
 
     // Vérifier que le montant est valide
@@ -271,7 +271,7 @@ exports.requestWithdrawal = async (req, res) => {
     }
 
     // Récupérer l'associé
-    const associate = await Associate.findById(associateId);
+    const associate = req.associate;
     if (!associate) {
       return res.status(404).json({
         success: false,
@@ -341,7 +341,7 @@ exports.requestWithdrawal = async (req, res) => {
 // Récupérer l'historique des retraits
 exports.getWithdrawalHistory = async (req, res) => {
   try {
-    const associateId = req.associate.id;
+    const associateId = req.associate._id;
     const { page = 1, limit = 10 } = req.query;
 
     const offset = (page - 1) * limit;
@@ -394,9 +394,9 @@ exports.getWithdrawalHistory = async (req, res) => {
 // Récupérer le profil de l'associé
 exports.getProfile = async (req, res) => {
   try {
-    const associateId = req.associate.id;
+    const associateId = req.associate._id;
 
-    const associate = await Associate.findById(associateId);
+    const associate = req.associate;
     if (!associate) {
       return res.status(404).json({
         success: false,
@@ -432,10 +432,10 @@ exports.getProfile = async (req, res) => {
 // Mettre à jour le profil de l'associé
 exports.updateProfile = async (req, res) => {
   try {
-    const associateId = req.associate.id;
+    const associateId = req.associate._id;
     const { firstName, lastName, phone, country, city } = req.body;
 
-    const associate = await Associate.findById(associateId);
+    const associate = req.associate;
     if (!associate) {
       return res.status(404).json({
         success: false,
@@ -476,10 +476,10 @@ exports.updateProfile = async (req, res) => {
 // Changer le mot de passe de l'associé
 exports.changePassword = async (req, res) => {
   try {
-    const associateId = req.associate.id;
+    const associateId = req.associate._id;
     const { currentPassword, newPassword } = req.body;
 
-    const associate = await Associate.findById(associateId);
+    const associate = req.associate;
     if (!associate) {
       return res.status(404).json({
         success: false,

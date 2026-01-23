@@ -257,51 +257,6 @@ exports.purchaseCV = async (req, res) => {
     let associateId = null;
     let commissionAmount = 0;
     
-    // Si un code de parrainage est fourni, le valider et créer une commission
-    if (referralCode) {
-      const associate = await Associate.findOne({ referralCode });
-      
-      if (associate) {
-        associateId = associate._id;
-        
-        // Calculer la commission (par exemple 20% du prix du CV)
-        commissionAmount = Math.round(cvPrice * 0.2);
-        
-        // Mettre à jour les statistiques de parrainage de l'associé
-        const currentDate = new Date();
-        const monthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
-        
-        // Incrémenter le nombre total de CV
-        associate.referralStats.totalCVs += 1;
-        
-        // Mettre à jour les statistiques par mois
-        if (!associate.referralStats.cvsByMonth) {
-          associate.referralStats.cvsByMonth = new Map();
-        }
-        
-        const currentMonthCount = associate.referralStats.cvsByMonth.get(monthKey) || 0;
-        associate.referralStats.cvsByMonth.set(monthKey, currentMonthCount + 1);
-        
-        // Mettre à jour les statistiques financières
-        associate.totalSales += cvPrice;
-        associate.totalCommission += commissionAmount;
-        associate.availableBalance += commissionAmount;
-        
-        await associate.save();
-        
-        // Créer une transaction de commission
-        await Payment.create({
-          associateId,
-          amount: commissionAmount,
-          currency: 'FCFA',
-          type: 'associate_commission',
-          status: 'completed',
-          paymentMethod: 'system',
-          notes: `Commission pour l'achat du CV #${cv ? cv._id : 'nouveau'} via le code de parrainage ${referralCode}`
-        });
-      }
-    }
-    
     // Créer le CV avec le code de parrainage s'il existe
     const cv = await CV.create({
       name: cvData.personalInfo?.firstName 
@@ -312,6 +267,103 @@ exports.purchaseCV = async (req, res) => {
       referralCode: referralCode || null,
       pdfUrl: req.body.pdfUrl || null // Sera mis à jour après la génération du PDF
     });
+    
+    // Si un code de parrainage est fourni, traiter la commission et mettre à jour les statistiques de l'associé
+    if (referralCode) {
+      try {
+        const associate = await Associate.findOne({ referralCode });
+        
+        if (associate) {
+          associateId = associate._id;
+          
+          // Calculer la commission (50% du prix du CV)
+          commissionAmount = Math.round(cvPrice * 0.5);
+          
+          // Mettre à jour les statistiques de parrainage de l'associé
+          const currentDate = new Date();
+          const monthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+          
+          // Incrémenter le nombre total de CV
+          associate.referralStats.totalCVs += 1;
+          
+          // Mettre à jour les statistiques par mois
+          if (!associate.referralStats.cvsByMonth) {
+            associate.referralStats.cvsByMonth = new Map();
+          }
+          
+          const currentMonthCount = associate.referralStats.cvsByMonth.get(monthKey) || 0;
+          associate.referralStats.cvsByMonth.set(monthKey, currentMonthCount + 1);
+          
+          // Mettre à jour les statistiques financières
+          associate.totalSales += cvPrice;
+          associate.totalCommission += commissionAmount;
+          associate.availableBalance += commissionAmount;
+          
+          // Ajouter la vente à l'historique des ventes de l'associé
+          const clientName = cvData.personalInfo?.firstName && cvData.personalInfo?.lastName
+            ? `${cvData.personalInfo.firstName} ${cvData.personalInfo.lastName}`
+            : 'Client';
+          
+          const clientEmail = cvData.personalInfo?.email || '';
+          
+          // Créer une nouvelle entrée dans l'historique des ventes avec l'ID du CV déjà créé
+          const newSale = {
+            cvId: cv._id,
+            clientName,
+            clientEmail,
+            amount: cvPrice,
+            commission: commissionAmount,
+            date: new Date(),
+            status: 'validated'  // Vente validée directement car le paiement est confirmé
+          };
+          
+          // Vérifier si salesHistory existe et est un tableau
+          if (!associate.salesHistory) {
+            associate.salesHistory = [];
+          }
+          
+          associate.salesHistory.push(newSale);
+          
+          // Mettre à jour les statistiques de ventes quotidiennes, hebdomadaires et mensuelles
+          const today = new Date();
+          const dayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+          const weekKey = `${today.getFullYear()}-W${Math.ceil((today.getDate() + new Date(today.getFullYear(), today.getMonth(), 1).getDay()) / 7)}`;
+          
+          // Initialiser les statistiques si elles n'existent pas
+          if (!associate.referralStats.salesByDay) associate.referralStats.salesByDay = new Map();
+          if (!associate.referralStats.salesByWeek) associate.referralStats.salesByWeek = new Map();
+          if (!associate.referralStats.salesByMonth) associate.referralStats.salesByMonth = new Map();
+          
+          // Mettre à jour les statistiques
+          const dailySales = associate.referralStats.salesByDay.get(dayKey) || 0;
+          associate.referralStats.salesByDay.set(dayKey, dailySales + commissionAmount);
+          
+          const weeklySales = associate.referralStats.salesByWeek.get(weekKey) || 0;
+          associate.referralStats.salesByWeek.set(weekKey, weeklySales + commissionAmount);
+          
+          const monthlySales = associate.referralStats.salesByMonth.get(monthKey) || 0;
+          associate.referralStats.salesByMonth.set(monthKey, monthlySales + commissionAmount);
+          
+          await associate.save();
+          
+          console.log(`Vente enregistrée pour l'associé ${associateId} avec le CV ${cv._id}`);
+          
+          // Créer une transaction de commission
+          await Payment.create({
+            associateId,
+            amount: commissionAmount,
+            currency: 'FCFA',
+            type: 'associate_commission',
+            status: 'completed',
+            paymentMethod: 'system',
+            notes: `Commission pour l'achat du CV #${cv._id} via le code de parrainage ${referralCode}`
+          });
+        }
+      } catch (error) {
+        console.error(`Erreur lors du traitement du parrainage:`, error);
+        // Ne pas bloquer le processus d'achat si cette étape échoue
+      }
+    }
     
     // Créer une transaction pour l'achat du CV
     await Payment.create({

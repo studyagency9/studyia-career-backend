@@ -11,6 +11,11 @@ const generateReferralCode = () => {
   return crypto.randomBytes(3).toString('hex').toUpperCase();
 };
 
+// Génération d'un lien de parrainage à partir d'un code
+const generateReferralLink = (referralCode) => {
+  return `${process.env.FRONTEND_URL}/?ref=${referralCode}`;
+};
+
 // Inscription d'un nouvel associé
 exports.signup = async (req, res) => {
   try {
@@ -37,8 +42,8 @@ exports.signup = async (req, res) => {
       }
     }
 
-    // Créer le lien de parrainage
-    const referralLink = `${process.env.FRONTEND_URL}/signup?ref=${referralCode}`;
+    // Créer le lien de parrainage (pointe vers la page principale)
+    const referralLink = generateReferralLink(referralCode);
 
     // Créer le nouvel associé
     const newAssociate = new Associate({
@@ -449,6 +454,12 @@ exports.updateProfile = async (req, res) => {
     if (phone) associate.phone = phone;
     if (country) associate.country = country;
     if (city) associate.city = city;
+    
+    // Mettre à jour le format du lien de parrainage si nécessaire
+    if (associate.referralLink && associate.referralLink.includes('/signup?ref=')) {
+      associate.referralLink = generateReferralLink(associate.referralCode);
+      console.log(`Lien de parrainage mis à jour pour l'associé ${associateId}: ${associate.referralLink}`);
+    }
 
     await associate.save();
 

@@ -666,8 +666,22 @@ exports.getMonthlyStats = async (req, res) => {
 // Récupérer l'historique des ventes avec filtrage
 exports.getSalesHistory = async (req, res) => {
   try {
+    console.log('Début de getSalesHistory');
+    console.log('req.associate:', req.associate ? 'Existe' : 'N\'existe pas');
+    
+    // Vérifier si req.associate existe et a les propriétés attendues
+    if (!req.associate) {
+      return res.status(400).json({
+        success: false,
+        error: 'Associé non trouvé dans la requête'
+      });
+    }
+    
     const associateId = req.associate._id;
     const associate = req.associate;
+    console.log('associateId:', associateId);
+    console.log('associate.salesHistory existe:', associate.salesHistory ? 'Oui' : 'Non');
+    
     const { status, search, page = 1, limit = 10 } = req.query;
 
     if (!associate) {
@@ -678,7 +692,27 @@ exports.getSalesHistory = async (req, res) => {
     }
 
     // Filtrer les ventes selon les paramètres
-    let filteredSales = [...associate.salesHistory];
+    let filteredSales = [];
+    
+    // Vérifier si salesHistory existe et est un tableau
+    if (associate.salesHistory && Array.isArray(associate.salesHistory)) {
+      filteredSales = [...associate.salesHistory];
+    } else {
+      console.log('salesHistory n\'est pas un tableau ou n\'existe pas');
+      // Retourner un tableau vide si salesHistory n'existe pas
+      return res.status(200).json({
+        success: true,
+        data: {
+          sales: [],
+          pagination: {
+            total: 0,
+            page: parseInt(page),
+            limit: parseInt(limit),
+            pages: 0
+          }
+        }
+      });
+    }
     
     // Filtrer par statut si spécifié
     if (status && ['pending', 'validated', 'rejected'].includes(status)) {
@@ -725,9 +759,11 @@ exports.getSalesHistory = async (req, res) => {
     });
   } catch (error) {
     console.error('Erreur lors de la récupération de l\'historique des ventes:', error);
+    console.error('Détails de l\'erreur:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
     return res.status(500).json({
       success: false,
-      error: 'Erreur serveur lors de la récupération de l\'historique des ventes'
+      error: 'Erreur serveur lors de la récupération de l\'historique des ventes',
+      message: error.message || 'Erreur inconnue'
     });
   }
 };

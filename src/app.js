@@ -51,8 +51,8 @@ app.use('/api/admin', apiLimiter, adminRoutes);
 app.use('/api/personnel', apiLimiter, personnelRoutes);
 app.use('/api/admin/users', apiLimiter, adminManagementRoutes);
 
-// Apply specific rate limiter for associates routes
-app.use('/api/associates', associateLimiter, associateRoutes);
+// Routes des associés sans limitation
+app.use('/api/associates', associateRoutes);
 
 // Health check route
 app.get('/health', (req, res) => {

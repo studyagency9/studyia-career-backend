@@ -250,6 +250,13 @@ exports.deleteCV = async (req, res) => {
 // Public CV purchase
 exports.purchaseCV = async (req, res) => {
   try {
+    console.log('Début du processus d\'achat de CV');
+    console.log('Données reçues:', JSON.stringify({
+      paymentToken: req.body.paymentToken ? 'Présent' : 'Absent',
+      cvDataPresent: !!req.body.cvData,
+      referralCode: req.body.referralCode || 'Aucun'
+    }));
+    
     const { paymentToken, cvData, referralCode } = req.body;
     
     // Définir le prix du CV (à ajuster selon votre modèle de tarification)
@@ -271,9 +278,11 @@ exports.purchaseCV = async (req, res) => {
     // Si un code de parrainage est fourni, traiter la commission et mettre à jour les statistiques de l'associé
     if (referralCode) {
       try {
+        console.log(`Recherche de l'associé avec le code de parrainage: ${referralCode}`);
         const associate = await Associate.findOne({ referralCode });
         
         if (associate) {
+          console.log(`Associé trouvé: ${associate.firstName} ${associate.lastName} (ID: ${associate._id})`);
           associateId = associate._id;
           
           // Calculer la commission (50% du prix du CV)
@@ -300,11 +309,15 @@ exports.purchaseCV = async (req, res) => {
           associate.availableBalance += commissionAmount;
           
           // Ajouter la vente à l'historique des ventes de l'associé
+          console.log(`Préparation de l'ajout d'une vente dans l'historique de l'associé ${associate._id}`);
+          
           const clientName = cvData.personalInfo?.firstName && cvData.personalInfo?.lastName
             ? `${cvData.personalInfo.firstName} ${cvData.personalInfo.lastName}`
             : 'Client';
           
           const clientEmail = cvData.personalInfo?.email || '';
+          
+          console.log(`Informations client: ${clientName} (${clientEmail})`);
           
           // Créer une nouvelle entrée dans l'historique des ventes avec l'ID du CV déjà créé
           const newSale = {
@@ -317,12 +330,18 @@ exports.purchaseCV = async (req, res) => {
             status: 'validated'  // Vente validée directement car le paiement est confirmé
           };
           
+          console.log(`Détails de la vente: ${JSON.stringify(newSale)}`);
+          
           // Vérifier si salesHistory existe et est un tableau
           if (!associate.salesHistory) {
+            console.log(`Initialisation du tableau salesHistory pour l'associé ${associate._id}`);
             associate.salesHistory = [];
+          } else {
+            console.log(`Nombre de ventes existantes dans l'historique: ${associate.salesHistory.length}`);
           }
           
           associate.salesHistory.push(newSale);
+          console.log(`Vente ajoutée à l'historique, nouveau total: ${associate.salesHistory.length}`);
           
           // Mettre à jour les statistiques de ventes quotidiennes, hebdomadaires et mensuelles
           const today = new Date();
@@ -344,20 +363,34 @@ exports.purchaseCV = async (req, res) => {
           const monthlySales = associate.referralStats.salesByMonth.get(monthKey) || 0;
           associate.referralStats.salesByMonth.set(monthKey, monthlySales + commissionAmount);
           
-          await associate.save();
+          try {
+            console.log(`Tentative de sauvegarde des modifications pour l'associé ${associateId}`);
+            await associate.save();
+            console.log(`Modifications sauvegardées avec succès pour l'associé ${associateId}`);
+          } catch (saveError) {
+            console.error(`Erreur lors de la sauvegarde de l'associé:`, saveError);
+            throw saveError; // Propager l'erreur pour arrêter le processus
+          }
           
           console.log(`Vente enregistrée pour l'associé ${associateId} avec le CV ${cv._id}`);
           
           // Créer une transaction de commission
-          await Payment.create({
-            associateId,
-            amount: commissionAmount,
-            currency: 'FCFA',
-            type: 'associate_commission',
-            status: 'completed',
-            paymentMethod: 'system',
-            notes: `Commission pour l'achat du CV #${cv._id} via le code de parrainage ${referralCode}`
-          });
+          try {
+            console.log(`Création d'une transaction de commission pour l'associé ${associateId}`);
+            const commissionPayment = await Payment.create({
+              associateId,
+              amount: commissionAmount,
+              currency: 'FCFA',
+              type: 'associate_commission',
+              status: 'completed',
+              paymentMethod: 'system',
+              notes: `Commission pour l'achat du CV #${cv._id} via le code de parrainage ${referralCode}`
+            });
+            console.log(`Transaction de commission créée avec succès: ${commissionPayment._id}`);
+          } catch (paymentError) {
+            console.error(`Erreur lors de la création de la transaction de commission:`, paymentError);
+            // Ne pas bloquer le processus si la création de la transaction échoue
+          }
         }
       } catch (error) {
         console.error(`Erreur lors du traitement du parrainage:`, error);
@@ -366,39 +399,57 @@ exports.purchaseCV = async (req, res) => {
     }
     
     // Créer une transaction pour l'achat du CV
-    await Payment.create({
-      amount: cvPrice,
-      currency: 'FCFA',
-      type: 'cv_purchase',
-      status: 'completed',
-      paymentMethod: 'card', // À remplacer par la méthode réelle
-      associateId, // Null si pas de code de parrainage
-      notes: `Achat du CV #${cv._id}`
-    });
+    try {
+      console.log(`Création d'une transaction pour l'achat du CV ${cv._id}`);
+      const payment = await Payment.create({
+        amount: cvPrice,
+        currency: 'FCFA',
+        type: 'cv_purchase',
+        status: 'completed',
+        paymentMethod: 'card', // À remplacer par la méthode réelle
+        associateId, // Null si pas de code de parrainage
+        notes: `Achat du CV #${cv._id}`
+      });
+      console.log(`Transaction d'achat créée avec succès: ${payment._id}`);
+    } catch (paymentError) {
+      console.error(`Erreur lors de la création de la transaction d'achat:`, paymentError);
+      throw paymentError; // Propager l'erreur car c'est une étape critique
+    }
     
     // Extraire les informations personnelles du CV pour la liste du personnel
     try {
+      console.log(`Tentative d'extraction des informations personnelles pour le CV ${cv._id}`);
       // Vérifier si les données nécessaires sont présentes
       if (cvData && cvData.personalInfo) {
         const personalInfo = cvData.personalInfo;
+        console.log(`Informations personnelles trouvées: ${personalInfo.firstName} ${personalInfo.lastName}`);
         
         // Créer une entrée dans la liste du personnel
-        await Personnel.create({
-          firstName: personalInfo.firstName || '',
-          lastName: personalInfo.lastName || '',
-          dateOfBirth: personalInfo.dateOfBirth ? new Date(personalInfo.dateOfBirth) : new Date(),
-          gender: personalInfo.gender || 'M',
-          phoneNumber: personalInfo.phoneNumber || personalInfo.phone || '',
-          position: personalInfo.position || personalInfo.jobTitle || '',
-          cvId: cv._id,
-          cvPdfUrl: cv.pdfUrl,
-          additionalInfo: {
-            email: personalInfo.email || '',
-            address: personalInfo.address || '',
-            education: cvData.education || [],
-            experience: cvData.experience || []
-          }
-        });
+        try {
+          console.log(`Création d'une entrée dans la liste du personnel`);
+          const personnel = await Personnel.create({
+            firstName: personalInfo.firstName || '',
+            lastName: personalInfo.lastName || '',
+            dateOfBirth: personalInfo.dateOfBirth ? new Date(personalInfo.dateOfBirth) : new Date(),
+            gender: personalInfo.gender || 'M',
+            phoneNumber: personalInfo.phoneNumber || personalInfo.phone || '',
+            position: personalInfo.position || personalInfo.jobTitle || '',
+            cvId: cv._id,
+            cvPdfUrl: cv.pdfUrl,
+            additionalInfo: {
+              email: personalInfo.email || '',
+              address: personalInfo.address || '',
+              education: cvData.education || [],
+              experience: cvData.experience || []
+            }
+          });
+          console.log(`Entrée personnel créée avec succès: ${personnel._id}`);
+        } catch (createError) {
+          console.error(`Erreur lors de la création de l'entrée personnel:`, createError);
+          throw createError; // Propager l'erreur car c'est une étape importante
+        }
+      } else {
+        console.log(`Aucune information personnelle trouvée dans les données du CV`);
       }
     } catch (personnelError) {
       console.error('Erreur lors de l\'extraction des informations du personnel:', personnelError);

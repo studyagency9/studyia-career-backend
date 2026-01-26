@@ -254,13 +254,16 @@ exports.purchaseCV = async (req, res) => {
     console.log('Données reçues:', JSON.stringify({
       paymentToken: req.body.paymentToken ? 'Présent' : 'Absent',
       cvDataPresent: !!req.body.cvData,
+      price: req.body.price || 'Non spécifié',
       referralCode: req.body.referralCode || 'Aucun'
     }));
     
-    const { paymentToken, cvData, referralCode } = req.body;
+    const { paymentToken, cvData, referralCode, price } = req.body;
     
-    // Définir le prix du CV (à ajuster selon votre modèle de tarification)
-    const cvPrice = 5000; // 5000 FCFA par exemple
+    // Utiliser le prix envoyé par le frontend ou une valeur par défaut si non spécifié
+    const cvPrice = price ? parseFloat(price) : 5000; // Valeur par défaut: 5000 FCFA
+    console.log(`Prix du CV: ${cvPrice} FCFA`);
+    
     let associateId = null;
     let commissionAmount = 0;
     

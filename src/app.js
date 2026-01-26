@@ -9,6 +9,7 @@ const { connectDB } = require('./config/database');
 const errorHandler = require('./middleware/error');
 const { apiLimiter, associateLimiter, associateAuthLimiter } = require('./middleware/rateLimiter');
 const { initDefaultPlans } = require('./controllers/plan.controller');
+const cvController = require('./controllers/cv.controller');
 
 // Import routes
 const authRoutes = require('./routes/auth.routes');
@@ -50,6 +51,12 @@ app.use('/api/ai', apiLimiter, aiRoutes);
 app.use('/api/admin', apiLimiter, adminRoutes);
 app.use('/api/personnel', apiLimiter, personnelRoutes);
 app.use('/api/admin/users', apiLimiter, adminManagementRoutes);
+
+// Route spécifique pour la compatibilité avec le frontend (sans 's' à cv)
+app.post('/api/cv/purchase', (req, res) => {
+  // Rediriger la requête vers le contrôleur approprié
+  cvController.purchaseCV(req, res);
+});
 
 // Routes des associés sans limitation
 app.use('/api/associates', associateRoutes);

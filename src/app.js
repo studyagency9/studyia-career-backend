@@ -54,9 +54,19 @@ app.use('/api/admin/users', apiLimiter, adminManagementRoutes);
 // Routes des associés sans limitation
 app.use('/api/associates', associateRoutes);
 
-// Health check route
+// Health check routes
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
+});
+
+// Route pour UpTimeRobot (répond aux requêtes HEAD)
+app.head('/health', (req, res) => {
+  res.status(200).end();
+});
+
+// Route spécifique pour UpTimeRobot
+app.all('/uptimerobot', (req, res) => {
+  res.status(200).end();
 });
 
 // Swagger documentation

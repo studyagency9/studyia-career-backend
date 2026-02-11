@@ -15,7 +15,7 @@ exports.authLimiter = rateLimit({
 // Rate limiter spécifique pour l'authentification des associés
 exports.associateAuthLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20, // 20 requests per IP
+  max: 100, // Augmenté à 100 requests per IP
   standardHeaders: true,
   legacyHeaders: false,
   message: {

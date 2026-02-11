@@ -63,10 +63,23 @@ app.use('/api/associates', associateRoutes);
 
 // Health check routes
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok' });
+  res.status(200).json({
+    success: true,
+    message: 'Server is running',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
 });
 
-// Route pour UpTimeRobot (répond aux requêtes HEAD)
+app.get('/api/health', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'API is running',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
 app.head('/health', (req, res) => {
   res.status(200).end();
 });

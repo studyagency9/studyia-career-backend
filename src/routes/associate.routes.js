@@ -6,7 +6,7 @@ const { associateAuthLimiter } = require('../middleware/rateLimiter');
 
 // Routes publiques
 router.post('/signup', associateController.signup);
-router.post('/login', associateController.login);
+router.post('/login', associateAuthLimiter, associateController.login);
 
 // Routes protégées (nécessitent authentification)
 router.get('/dashboard', authenticateAssociate, associateController.getDashboard);

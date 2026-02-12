@@ -544,3 +544,47 @@ exports.deleteInvoicePDF = async (req, res) => {
     });
   }
 };
+
+// Exporter les factures en CSV
+exports.exportInvoices = async (req, res) => {
+  try {
+    const { status, clientType, startDate, endDate } = req.query;
+
+    const filter = {};
+    
+    if (status && status !== 'all') {
+      filter.status = status;
+    }
+    
+    if (clientType && clientType !== 'all') {
+      filter.clientType = clientType;
+    }
+    
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) filter.createdAt.$gte = new Date(startDate);
+      if (endDate) filter.createdAt.$lte = new Date(endDate);
+    }
+
+    const invoices = await Invoice.find(filter).sort({ createdAt: -1 });
+
+    // Générer le CSV
+    const csvHeader = 'Invoice Number,Client Name,Client Email,Client Type,Amount,Tax,Total,Status,Due Date,Created Date\n';
+    const csvData = invoices.map(invoice => 
+      `"${invoice.invoiceNumber}","${invoice.clientInfo?.name || 'N/A'}","${invoice.clientInfo?.email || 'N/A'}","${invoice.clientType}","${invoice.subtotal}","${invoice.tax}","${invoice.total}","${invoice.status}","${invoice.dueDate}","${invoice.createdAt}"`
+    ).join('\n');
+
+    const csv = csvHeader + csvData;
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="invoices-${new Date().toISOString().split('T')[0]}.csv"`);
+    
+    res.status(200).send(csv);
+  } catch (error) {
+    console.error('Export invoices error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error while exporting invoices'
+    });
+  }
+};

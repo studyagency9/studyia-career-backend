@@ -414,6 +414,79 @@ const personnelSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// Schéma Invoice
+const invoiceSchema = new mongoose.Schema({
+  invoiceNumber: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  clientId: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: true
+  },
+  clientType: {
+    type: String,
+    enum: ['customer', 'associate', 'partner'],
+    required: true
+  },
+  clientInfo: {
+    name: String,
+    email: String,
+    phone: String,
+    company: String
+  },
+  items: [{
+    description: {
+      type: String,
+      required: true
+    },
+    quantity: {
+      type: Number,
+      default: 1
+    },
+    unitPrice: {
+      type: Number,
+      required: true
+    },
+    total: {
+      type: Number,
+      required: true
+    }
+  }],
+  subtotal: {
+    type: Number,
+    required: true
+  },
+  tax: {
+    type: Number,
+    default: 0
+  },
+  total: {
+    type: Number,
+    required: true
+  },
+  dueDate: {
+    type: Date,
+    required: true
+  },
+  status: {
+    type: String,
+    enum: ['pending', 'paid', 'overdue', 'cancelled'],
+    default: 'pending'
+  },
+  paidAt: Date,
+  paymentDate: Date,
+  paymentMethod: String,
+  notes: String,
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: true
+  }
+}, {
+  timestamps: true
+});
+
 // Création des modèles
 const Partner = mongoose.model('Partner', partnerSchema);
 const CV = mongoose.model('CV', cvSchema);
@@ -423,6 +496,7 @@ const Admin = mongoose.model('Admin', adminSchema);
 const Associate = mongoose.model('Associate', associateSchema);
 const Payment = mongoose.model('Payment', paymentSchema);
 const Personnel = mongoose.model('Personnel', personnelSchema);
+const Invoice = mongoose.model('Invoice', invoiceSchema);
 
 module.exports = {
   Partner,
@@ -432,5 +506,6 @@ module.exports = {
   Admin,
   Associate,
   Payment,
-  Personnel
+  Personnel,
+  Invoice
 };

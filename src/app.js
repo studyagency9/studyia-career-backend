@@ -21,6 +21,7 @@ const adminRoutes = require('./routes/admin.routes');
 const personnelRoutes = require('./routes/personnel.routes');
 const adminManagementRoutes = require('./routes/admin-management.routes');
 const associateRoutes = require('./routes/associate.routes');
+const invoiceRoutes = require('./routes/invoice.routes');
 
 // Load environment variables
 dotenv.config();
@@ -94,6 +95,7 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/personnel', personnelRoutes);
 app.use('/api/admin/users', adminManagementRoutes);
+app.use('/api/invoices', invoiceRoutes);
 
 // Route spécifique pour la compatibilité avec le frontend (sans 's' à cv)
 app.post('/api/cv/purchase', (req, res) => {

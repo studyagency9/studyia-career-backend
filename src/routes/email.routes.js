@@ -13,6 +13,9 @@ const {
 // Route principale pour lister les emails (admin seulement)
 router.get('/emails', authenticateAdmin, async (req, res) => {
   try {
+    console.log('🔍 DEBUG: Route /emails appelée');
+    console.log('🔍 DEBUG: User authentifié:', !!req.user);
+    
     const {
       limit = 20,
       offset = 0,
@@ -20,6 +23,8 @@ router.get('/emails', authenticateAdmin, async (req, res) => {
       unreadOnly = false,
       search = null
     } = req.query;
+
+    console.log('🔍 DEBUG: Paramètres:', { limit, offset, folder, unreadOnly, search });
 
     const options = {
       limit: parseInt(limit),
@@ -29,7 +34,9 @@ router.get('/emails', authenticateAdmin, async (req, res) => {
       search: search || null
     };
 
+    console.log('🔍 DEBUG: Appel de listEmails...');
     const result = await listEmails(options);
+    console.log('🔍 DEBUG: listEmails réussi, emails:', result.emails?.length);
 
     res.status(200).json({
       success: true,
@@ -37,7 +44,8 @@ router.get('/emails', authenticateAdmin, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erreur lors de la récupération des emails:', error);
+    console.error('❌ Erreur route /emails:', error.message);
+    console.error('❌ Stack:', error.stack);
     res.status(500).json({
       success: false,
       error: 'Erreur lors de la récupération des emails',

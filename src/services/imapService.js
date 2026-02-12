@@ -74,32 +74,37 @@ const listEmails = async (options = {}) => {
     console.log(`📧 Boîte sélectionnée: ${mailbox.name} (${mailbox.exists} messages)`);
 
     // Construire la recherche
-    let searchCriteria = [];
+    let searchCriteria = ['ALL']; // Toujours commencer avec ALL
     
     if (unreadOnly) {
-      searchCriteria.push(['UNSEEN']);
+      searchCriteria = ['UNSEEN'];
     }
     
     if (search) {
-      searchCriteria.push(['OR', ['SUBJECT', search], ['FROM', search], ['BODY', search]]);
+      // Remplacer la recherche par une recherche combinée
+      searchCriteria = ['OR', ['SUBJECT', search], ['FROM', search], ['BODY', search]];
+      if (unreadOnly) {
+        searchCriteria = ['AND', ['UNSEEN'], searchCriteria];
+      }
     }
 
     // Récupérer les messages
     let messages;
-    if (searchCriteria.length > 0) {
-      try {
-        const searchResult = await client.search(searchCriteria);
-        messages = Array.isArray(searchResult) ? searchResult : [];
-      } catch (searchError) {
-        console.error('❌ Erreur recherche IMAP:', searchError.message);
-        // Fallback: récupérer tous les messages
-        messages = await client.search(['ALL']);
-        messages = Array.isArray(messages) ? messages : [];
-      }
-    } else {
-      // Récupérer tous les messages (du plus récent au plus ancien)
-      const searchResult = await client.search(['ALL']);
+    try {
+      console.log('🔍 DEBUG: Search criteria:', searchCriteria);
+      const searchResult = await client.search(searchCriteria);
       messages = Array.isArray(searchResult) ? searchResult : [];
+      console.log('🔍 DEBUG: Search result:', messages.length, 'messages');
+    } catch (searchError) {
+      console.error('❌ Erreur recherche IMAP:', searchError.message);
+      // Fallback: récupérer tous les messages
+      try {
+        const fallbackResult = await client.search(['ALL']);
+        messages = Array.isArray(fallbackResult) ? fallbackResult : [];
+      } catch (fallbackError) {
+        console.error('❌ Erreur fallback IMAP:', fallbackError.message);
+        messages = [];
+      }
     }
 
     // S'assurer que messages est un tableau

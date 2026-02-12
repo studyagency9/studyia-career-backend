@@ -23,6 +23,7 @@ const adminManagementRoutes = require('./routes/admin-management.routes');
 const associateRoutes = require('./routes/associate.routes');
 const invoiceRoutes = require('./routes/invoice.routes');
 const contactRoutes = require('./routes/contact.routes');
+const emailRoutes = require('./routes/email.routes');
 
 // Load environment variables
 dotenv.config();
@@ -98,6 +99,7 @@ app.use('/api/personnel', personnelRoutes);
 app.use('/api/admin/users', adminManagementRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api', contactRoutes); // Routes publiques de contact
+app.use('/api/admin', emailRoutes); // Routes admin pour la lecture des emails
 
 // Route spécifique pour la compatibilité avec le frontend (sans 's' à cv)
 app.post('/api/cv/purchase', (req, res) => {
@@ -255,6 +257,10 @@ const startServer = async () => {
     // Initialiser le service email
     const { initMailService } = require('./services/mailService');
     await initMailService();
+    
+    // Initialiser le service IMAP
+    const { initImapService } = require('./services/imapService');
+    await initImapService();
     
     // Démarrer le serveur
     app.listen(PORT, () => {

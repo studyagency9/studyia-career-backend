@@ -94,6 +94,7 @@ exports.getAllInvoices = async (req, res) => {
     const skip = (page - 1) * limit;
 
     const invoices = await Invoice.find(filter)
+      .select('invoiceNumber clientId clientType clientInfo items subtotal tax total dueDate status paidAt paymentDate paymentMethod notes createdAt updatedAt pdfUrl pdfVersion pdfData.size')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -385,46 +386,161 @@ exports.getInvoiceStats = async (req, res) => {
   }
 };
 
-// Exporter les factures en CSV
-exports.exportInvoices = async (req, res) => {
+// Upload PDF depuis le frontend
+exports.uploadInvoicePDF = async (req, res) => {
   try {
-    const { status, clientType, startDate, endDate } = req.query;
-
-    const filter = {};
+    const { id } = req.params;
     
-    if (status && status !== 'all') {
-      filter.status = status;
-    }
-    
-    if (clientType && clientType !== 'all') {
-      filter.clientType = clientType;
-    }
-    
-    if (startDate || endDate) {
-      filter.createdAt = {};
-      if (startDate) filter.createdAt.$gte = new Date(startDate);
-      if (endDate) filter.createdAt.$lte = new Date(endDate);
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'Aucun fichier PDF fourni'
+      });
     }
 
-    const invoices = await Invoice.find(filter).sort({ createdAt: -1 });
-
-    // Générer le CSV
-    const csvHeader = 'Invoice Number,Client Name,Client Email,Client Type,Amount,Tax,Total,Status,Due Date,Created Date\n';
-    const csvData = invoices.map(invoice => 
-      `"${invoice.invoiceNumber}","${invoice.clientInfo?.name || 'N/A'}","${invoice.clientInfo?.email || 'N/A'}","${invoice.clientType}","${invoice.subtotal}","${invoice.tax}","${invoice.total}","${invoice.status}","${invoice.dueDate}","${invoice.createdAt}"`
-    ).join('\n');
-
-    const csv = csvHeader + csvData;
-
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename="invoices-${new Date().toISOString().split('T')[0]}.csv"`);
+    const invoice = await Invoice.findById(id);
     
-    res.status(200).send(csv);
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        error: 'Facture non trouvée'
+      });
+    }
+
+    // Sauvegarder le PDF dans la facture
+    invoice.pdfData = {
+      data: req.file.buffer,
+      contentType: req.file.mimetype,
+      size: req.file.size,
+      filename: `invoice-${invoice.invoiceNumber}.pdf`,
+      generatedAt: new Date()
+    };
+    
+    invoice.pdfUrl = `/api/invoices/${id}/download-pdf`;
+    invoice.pdfVersion += 1;
+    
+    await invoice.save();
+
+    res.status(200).json({
+      success: true,
+      data: {
+        message: 'PDF uploadé avec succès',
+        pdfUrl: invoice.pdfUrl,
+        pdfSize: req.file.size,
+        pdfVersion: invoice.pdfVersion
+      }
+    });
   } catch (error) {
-    console.error('Export invoices error:', error);
+    console.error('Upload PDF error:', error);
     res.status(500).json({
       success: false,
-      error: 'Server error while exporting invoices'
+      error: 'Server error while uploading PDF'
+    });
+  }
+};
+
+// Télécharger PDF
+exports.downloadInvoicePDF = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const invoice = await Invoice.findById(id);
+    
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        error: 'Facture non trouvée'
+      });
+    }
+
+    if (!invoice.pdfData || !invoice.pdfData.data) {
+      return res.status(404).json({
+        success: false,
+        error: 'PDF non disponible pour cette facture'
+      });
+    }
+
+    // Configurer les headers pour le téléchargement
+    res.setHeader('Content-Type', invoice.pdfData.contentType);
+    res.setHeader('Content-Length', invoice.pdfData.size);
+    res.setHeader('Content-Disposition', `attachment; filename="${invoice.pdfData.filename}"`);
+    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache 24h
+
+    // Envoyer les données du PDF
+    res.send(invoice.pdfData.data);
+  } catch (error) {
+    console.error('Download PDF error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error while downloading PDF'
+    });
+  }
+};
+
+// Vérifier si un PDF existe
+exports.checkPDFExists = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const invoice = await Invoice.findById(id, 'pdfData pdfUrl pdfVersion');
+    
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        error: 'Facture non trouvée'
+      });
+    }
+
+    const hasPDF = !!(invoice.pdfData && invoice.pdfData.data);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        hasPDF,
+        pdfUrl: hasPDF ? invoice.pdfUrl : null,
+        pdfSize: hasPDF ? invoice.pdfData.size : null,
+        pdfVersion: invoice.pdfVersion,
+        generatedAt: hasPDF ? invoice.pdfData.generatedAt : null
+      }
+    });
+  } catch (error) {
+    console.error('Check PDF error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error while checking PDF'
+    });
+  }
+};
+
+// Supprimer PDF
+exports.deleteInvoicePDF = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const invoice = await Invoice.findById(id);
+    
+    if (!invoice) {
+      return res.status(404).json({
+        success: false,
+        error: 'Facture non trouvée'
+      });
+    }
+
+    // Supprimer les données PDF
+    invoice.pdfData = undefined;
+    invoice.pdfUrl = null;
+    
+    await invoice.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'PDF supprimé avec succès'
+    });
+  } catch (error) {
+    console.error('Delete PDF error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error while deleting PDF'
     });
   }
 };

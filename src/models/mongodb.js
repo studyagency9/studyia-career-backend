@@ -434,7 +434,10 @@ const invoiceSchema = new mongoose.Schema({
     name: String,
     email: String,
     phone: String,
-    company: String
+    company: String,
+    address: String,
+    city: String,
+    country: String
   },
   items: [{
     description: {
@@ -482,6 +485,19 @@ const invoiceSchema = new mongoose.Schema({
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     required: true
+  },
+  // Gestion des PDFs
+  pdfData: {
+    data: Buffer,      // Données binaires du PDF
+    contentType: String, // 'application/pdf'
+    size: Number,      // Taille en octets
+    filename: String,  // Nom du fichier
+    generatedAt: Date  // Date de génération
+  },
+  pdfUrl: String,      // URL pour télécharger le PDF
+  pdfVersion: {
+    type: Number,
+    default: 1
   }
 }, {
   timestamps: true

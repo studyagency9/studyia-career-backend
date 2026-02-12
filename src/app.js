@@ -24,6 +24,7 @@ const associateRoutes = require('./routes/associate.routes');
 const invoiceRoutes = require('./routes/invoice.routes');
 const contactRoutes = require('./routes/contact.routes');
 const emailRoutes = require('./routes/email.routes');
+const pdfRoutes = require('./routes/pdf.routes'); // 🆕 Routes PDF upload
 
 // Load environment variables
 dotenv.config();
@@ -45,6 +46,9 @@ app.use(cors({
 }));
 app.use(express.json()); // Parse JSON bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
+
+// 🆕 Servir les fichiers PDF statiquement
+app.use('/uploads/pdfs', express.static('uploads/pdfs'));
 
 // Middleware de logging pour toutes les requêtes
 app.use((req, res, next) => {
@@ -100,6 +104,7 @@ app.use('/api/admin/users', adminManagementRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api', contactRoutes); // Routes publiques de contact
 app.use('/api/admin', emailRoutes); // Routes admin pour la lecture des emails
+app.use('/api/pdfs', pdfRoutes); // 🆕 Routes upload PDF
 
 // Route spécifique pour la compatibilité avec le frontend (sans 's' à cv)
 app.post('/api/cv/purchase', (req, res) => {

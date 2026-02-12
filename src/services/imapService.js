@@ -87,11 +87,28 @@ const listEmails = async (options = {}) => {
     // Récupérer les messages
     let messages;
     if (searchCriteria.length > 0) {
-      messages = await client.search(searchCriteria);
+      try {
+        const searchResult = await client.search(searchCriteria);
+        messages = Array.isArray(searchResult) ? searchResult : [];
+      } catch (searchError) {
+        console.error('❌ Erreur recherche IMAP:', searchError.message);
+        // Fallback: récupérer tous les messages
+        messages = await client.search(['ALL']);
+        messages = Array.isArray(messages) ? messages : [];
+      }
     } else {
       // Récupérer tous les messages (du plus récent au plus ancien)
-      messages = await client.search(['ALL']);
+      const searchResult = await client.search(['ALL']);
+      messages = Array.isArray(searchResult) ? searchResult : [];
     }
+
+    // S'assurer que messages est un tableau
+    if (!Array.isArray(messages)) {
+      console.error('❌ messages n\'est pas un tableau:', typeof messages, messages);
+      messages = [];
+    }
+
+    console.log('🔍 DEBUG: Messages trouvés:', messages.length);
 
     // Limiter et paginer
     const startIndex = Math.max(0, messages.length - offset - limit);
@@ -182,28 +199,51 @@ const getEmail = async (uid) => {
   try {
     await connectImap();
     
+    console.log('🔍 DEBUG: getEmail appelé pour UID:', uid);
+    
     const message = await client.fetchOne(uid, { 
       envelope: true, 
       flags: true, 
-      bodyStructure: true,
-      bodyParts: ['1', '2']
+      bodyStructure: true
     });
     
-    // Récupérer toutes les parties du corps
+    console.log('🔍 DEBUG: Message fetchOne result:', !!message);
+    console.log('🔍 DEBUG: Message keys:', message ? Object.keys(message) : 'null');
+    
+    if (!message) {
+      throw new Error('Message non trouvé');
+    }
+    
+    // Récupérer le corps du message séparément
     let body = '';
     let htmlBody = '';
     
-    if (message.bodyParts) {
-      for (const part of message.bodyParts) {
-        if (part.partNumber === '1') {
-          body = part.body?.toString() || '';
-        } else if (part.partNumber === '2') {
-          htmlBody = part.body?.toString() || '';
-        }
+    try {
+      // Essayer de récupérer le corps texte
+      const textBody = await client.fetchOne(uid, { bodyPart: '1' });
+      if (textBody && textBody.body) {
+        body = textBody.body.toString();
       }
+    } catch (bodyError) {
+      console.log('🔍 DEBUG: Impossible de récupérer le corps texte:', bodyError.message);
     }
-
-    const email = {
+    
+    try {
+      // Essayer de récupérer le corps HTML
+      const htmlPart = await client.fetchOne(uid, { bodyPart: '2' });
+      if (htmlPart && htmlPart.body) {
+        htmlBody = htmlPart.body.toString();
+      }
+    } catch (htmlError) {
+      console.log('🔍 DEBUG: Impossible de récupérer le corps HTML:', htmlError.message);
+    }
+    
+    // Détecter les pièces jointes
+    const hasAttachments = message.bodyStructure && 
+      message.bodyStructure.childNodes && 
+      message.bodyStructure.childNodes.some(child => child.disposition === 'attachment');
+    
+    return {
       uid: uid,
       messageId: message.envelope.messageId,
       date: message.envelope.date,
@@ -214,13 +254,13 @@ const getEmail = async (uid) => {
       flags: message.flags,
       unread: !message.flags.includes('\\Seen'),
       important: message.flags.includes('\\Flagged'),
-      body: body,
-      htmlBody: htmlBody,
-      hasAttachments: message.bodyStructure?.parts?.some(part => part.disposition === 'attachment') || false,
-      size: message.bodyStructure?.size || 0
+      body,
+      htmlBody,
+      hasAttachments,
+      size: message.size || 0,
+      attachments: [] // Sera implémenté si nécessaire
     };
-
-    return email;
+    
   } catch (error) {
     console.error('❌ Erreur lors de la récupération de l\'email:', error);
     throw error;

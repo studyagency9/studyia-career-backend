@@ -1,7 +1,7 @@
 const nodemailer = require('nodemailer');
 
 // Configuration du transporteur email
-const transporter = nodemailer.createTransporter({
+const transporter = nodemailer.createTransport({
   host: "smtp.hostinger.com",
   port: 465,
   secure: true, // SSL

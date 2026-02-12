@@ -29,15 +29,16 @@ dotenv.config();
 const app = express();
 
 // Middleware
-app.use(helmet()); // Security headers
+// app.use(helmet()); // Désactivé temporairement pour éviter les blocages CORS
 app.use(cors({
-  origin: ['https://career.studyia.net', 'http://localhost:3000', 'http://localhost:5173', '*'],
+  origin: '*', // Accepter les requêtes de TOUTES les sources
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  exposedHeaders: ['Content-Length', 'Content-Type'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH'],
+  allowedHeaders: '*', // Autoriser TOUS les en-têtes
+  exposedHeaders: '*',
   preflightContinue: false,
-  optionsSuccessStatus: 204
+  optionsSuccessStatus: 204,
+  maxAge: 86400 // 24 heures de cache pour les preflight
 }));
 app.use(express.json()); // Parse JSON bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
@@ -46,6 +47,15 @@ app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
   console.log('Headers:', JSON.stringify(req.headers, null, 2));
+  
+  // Ajouter headers CORS manuellement pour être sûr
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH');
+  res.header('Access-Control-Allow-Headers', '*');
+  res.header('Access-Control-Expose-Headers', '*');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Max-Age', '86400');
+  
   next();
 });
 
@@ -72,6 +82,14 @@ app.use('/api/associates', associateRoutes);
 app.get('/health', (req, res) => {
   console.log('Health check accessed - Method:', req.method, 'URL:', req.url);
   console.log('Headers:', req.headers);
+  
+  // Headers CORS explicites
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', '*');
+  res.header('Access-Control-Allow-Headers', '*');
+  res.header('Access-Control-Expose-Headers', '*');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
   res.status(200).json({
     success: true,
     message: 'Server is running',
@@ -83,6 +101,14 @@ app.get('/health', (req, res) => {
 app.get('/api/health', (req, res) => {
   console.log('API Health check accessed - Method:', req.method, 'URL:', req.url);
   console.log('Headers:', req.headers);
+  
+  // Headers CORS explicites
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', '*');
+  res.header('Access-Control-Allow-Headers', '*');
+  res.header('Access-Control-Expose-Headers', '*');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
   res.status(200).json({
     success: true,
     message: 'API is running',
@@ -92,12 +118,35 @@ app.get('/api/health', (req, res) => {
 });
 
 app.head('/health', (req, res) => {
+  // Headers CORS explicites même pour HEAD
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', '*');
+  res.header('Access-Control-Allow-Headers', '*');
+  res.header('Access-Control-Expose-Headers', '*');
+  res.header('Access-Control-Allow-Credentials', 'true');
   res.status(200).end();
 });
 
 // Route spécifique pour UpTimeRobot
 app.all('/uptimerobot', (req, res) => {
+  // Headers CORS explicites pour toutes les méthodes
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', '*');
+  res.header('Access-Control-Allow-Headers', '*');
+  res.header('Access-Control-Expose-Headers', '*');
+  res.header('Access-Control-Allow-Credentials', 'true');
   res.status(200).end();
+});
+
+// Middleware OPTIONS global pour gérer toutes les requêtes preflight
+app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH');
+  res.header('Access-Control-Allow-Headers', '*');
+  res.header('Access-Control-Expose-Headers', '*');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Max-Age', '86400');
+  res.status(204).end();
 });
 
 // Swagger documentation

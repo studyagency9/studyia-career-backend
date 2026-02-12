@@ -328,6 +328,10 @@ const paymentSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Associate'
   },
+  isDirectPurchase: {
+    type: Boolean,
+    default: false
+  },
   amount: {
     type: Number,
     required: true

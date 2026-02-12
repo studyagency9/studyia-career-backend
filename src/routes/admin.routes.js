@@ -8,6 +8,7 @@ const { authenticateAdmin, requireSuperAdmin } = require('../middleware/auth');
 router.post('/login', adminController.login);
 
 // Protected routes (require admin authentication)
+router.get('/stats/financial', authenticateAdmin, adminController.getFinancialStats);
 router.get('/stats/dashboard', authenticateAdmin, adminController.getDashboardStats);
 router.get('/cvs', authenticateAdmin, adminController.getAllCVs);
 router.get('/partners', authenticateAdmin, adminController.getAllPartners);

@@ -2,6 +2,63 @@ const { Admin, Partner, CV, Associate, Payment } = require('../models');
 const { generateAccessToken } = require('../utils/jwt');
 const mongoose = require('mongoose');
 
+// Statistiques financières simples
+exports.getFinancialStats = async (req, res) => {
+  try {
+    const stats = await Payment.aggregate([
+      {
+        $match: { 
+          type: 'cv_purchase', 
+          status: 'completed' 
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalRevenue: { $sum: '$amount' },
+          directRevenue: {
+            $sum: {
+              $cond: [{ $eq: ['$isDirectPurchase', true] }, '$amount', 0]
+            }
+          },
+          referralRevenue: {
+            $sum: {
+              $cond: [{ $eq: ['$isDirectPurchase', false] }, '$amount', 0]
+            }
+          },
+          totalPurchases: { $sum: 1 },
+          directPurchases: {
+            $sum: { $cond: [{ $eq: ['$isDirectPurchase', true] }, 1, 0] }
+          },
+          referralPurchases: {
+            $sum: { $cond: [{ $eq: ['$isDirectPurchase', false] }, 1, 0] }
+          }
+        }
+      }
+    ]);
+
+    const data = stats[0] || {
+      totalRevenue: 0,
+      directRevenue: 0,
+      referralRevenue: 0,
+      totalPurchases: 0,
+      directPurchases: 0,
+      referralPurchases: 0
+    };
+
+    res.status(200).json({
+      success: true,
+      data
+    });
+  } catch (error) {
+    console.error('Get financial stats error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error while fetching financial stats'
+    });
+  }
+};
+
 // Admin login
 exports.login = async (req, res) => {
   try {

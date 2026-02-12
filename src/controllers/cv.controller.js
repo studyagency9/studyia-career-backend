@@ -411,6 +411,7 @@ exports.purchaseCV = async (req, res) => {
         status: 'completed',
         paymentMethod: 'card', // À remplacer par la méthode réelle
         associateId, // Null si pas de code de parrainage
+        isDirectPurchase: !referralCode, // true si pas de referralCode
         notes: `Achat du CV #${cv._id}`
       });
       console.log(`Transaction d'achat créée avec succès: ${payment._id}`);

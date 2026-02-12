@@ -48,6 +48,22 @@ app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
   console.log('Headers:', JSON.stringify(req.headers, null, 2));
   
+  // Diagnostic IP détaillé
+  const clientIP = req.headers['cf-connecting-ip'] || 
+                   req.headers['x-forwarded-for']?.split(',')[0] || 
+                   req.headers['true-client-ip'] || 
+                   req.connection.remoteAddress || 
+                   req.socket.remoteAddress;
+  
+  console.log('=== DIAGNOSTIC IP ===');
+  console.log('Client IP:', clientIP);
+  console.log('CF-Connecting-IP:', req.headers['cf-connecting-ip']);
+  console.log('X-Forwarded-For:', req.headers['x-forwarded-for']);
+  console.log('True-Client-IP:', req.headers['true-client-ip']);
+  console.log('CF-Ray:', req.headers['cf-ray']);
+  console.log('CF-IPCountry:', req.headers['cf-ipcountry']);
+  console.log('=========================');
+  
   // Ajouter headers CORS manuellement pour être sûr
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH');
@@ -59,15 +75,25 @@ app.use((req, res, next) => {
   next();
 });
 
-// Apply rate limiting to specific routes
-app.use('/api/auth', apiLimiter, authRoutes);
-app.use('/api/cvs', apiLimiter, cvRoutes);
-app.use('/api/profile', apiLimiter, profileRoutes);
-app.use('/api/plans', apiLimiter, planRoutes);
-app.use('/api/ai', apiLimiter, aiRoutes);
-app.use('/api/admin', apiLimiter, adminRoutes);
-app.use('/api/personnel', apiLimiter, personnelRoutes);
-app.use('/api/admin/users', apiLimiter, adminManagementRoutes);
+// Apply rate limiting to specific routes (DÉSACTIVÉ pour diagnostic)
+// app.use('/api/auth', apiLimiter, authRoutes);
+// app.use('/api/cvs', apiLimiter, cvRoutes);
+// app.use('/api/profile', apiLimiter, profileRoutes);
+// app.use('/api/plans', apiLimiter, planRoutes);
+// app.use('/api/ai', apiLimiter, aiRoutes);
+// app.use('/api/admin', apiLimiter, adminRoutes);
+// app.use('/api/personnel', apiLimiter, personnelRoutes);
+// app.use('/api/admin/users', apiLimiter, adminManagementRoutes);
+
+// Routes SANS rate limiting pour diagnostic
+app.use('/api/auth', authRoutes);
+app.use('/api/cvs', cvRoutes);
+app.use('/api/profile', profileRoutes);
+app.use('/api/plans', planRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/personnel', personnelRoutes);
+app.use('/api/admin/users', adminManagementRoutes);
 
 // Route spécifique pour la compatibilité avec le frontend (sans 's' à cv)
 app.post('/api/cv/purchase', (req, res) => {
@@ -136,6 +162,38 @@ app.all('/uptimerobot', (req, res) => {
   res.header('Access-Control-Expose-Headers', '*');
   res.header('Access-Control-Allow-Credentials', 'true');
   res.status(200).end();
+});
+
+// Route de test pour diagnostic login
+app.post('/api/test-login', (req, res) => {
+  console.log('=== TEST LOGIN ROUTE ===');
+  console.log('Body:', req.body);
+  console.log('Headers:', JSON.stringify(req.headers, null, 2));
+  
+  // Diagnostic IP détaillé
+  const clientIP = req.headers['cf-connecting-ip'] || 
+                   req.headers['x-forwarded-for']?.split(',')[0] || 
+                   req.headers['true-client-ip'] || 
+                   req.connection.remoteAddress || 
+                   req.socket.remoteAddress;
+  
+  console.log('Client IP:', clientIP);
+  console.log('=========================');
+  
+  // Réponse simple pour test
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', '*');
+  res.header('Access-Control-Allow-Headers', '*');
+  res.header('Access-Control-Expose-Headers', '*');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  res.status(200).json({
+    success: true,
+    message: 'Test login route works',
+    timestamp: new Date().toISOString(),
+    clientIP: clientIP,
+    receivedBody: req.body
+  });
 });
 
 // Middleware OPTIONS global pour gérer toutes les requêtes preflight

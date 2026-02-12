@@ -159,6 +159,17 @@ router.get('/emails/stats', authenticateAdmin, async (req, res) => {
 // Route de santé pour le service IMAP (admin seulement)
 router.get('/emails/health', authenticateAdmin, async (req, res) => {
   try {
+    console.log('🔍 DEBUG: Vérification santé IMAP...');
+    
+    // Vérifier si la variable d'environnement est configurée
+    if (!process.env.MAIL_PASSWORD || process.env.MAIL_PASSWORD === 'VOTRE_MOT_DE_PASSE_ICI') {
+      return res.status(503).json({
+        success: false,
+        error: 'Service IMAP non configuré',
+        details: 'MAIL_PASSWORD non configuré correctement'
+      });
+    }
+    
     const isConnected = await initImapService();
     
     res.status(200).json({
@@ -173,10 +184,11 @@ router.get('/emails/health', authenticateAdmin, async (req, res) => {
     });
 
   } catch (error) {
-    res.status(500).json({
+    console.error('❌ Erreur santé IMAP:', error.message);
+    res.status(503).json({
       success: false,
       error: 'Service IMAP indisponible',
-      details: process.env.NODE_ENV === 'development' ? error.message : null
+      details: error.message
     });
   }
 });

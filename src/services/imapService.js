@@ -16,16 +16,29 @@ let client = null;
 // Connexion au serveur IMAP
 const connectImap = async () => {
   try {
+    console.log('🔍 DEBUG: Tentative de connexion IMAP...');
+    console.log('🔍 DEBUG: MAIL_PASSWORD présent:', !!process.env.MAIL_PASSWORD);
+    console.log('🔍 DEBUG: MAIL_PASSWORD length:', process.env.MAIL_PASSWORD?.length || 0);
+    
+    if (!process.env.MAIL_PASSWORD || process.env.MAIL_PASSWORD === 'VOTRE_MOT_DE_PASSE_ICI') {
+      throw new Error('MAIL_PASSWORD non configuré correctement');
+    }
+    
     if (client && client.usable) {
+      console.log('✅ Client IMAP déjà connecté');
       return client;
     }
 
+    console.log('🔍 DEBUG: Création du client IMAP...');
     client = new ImapFlow(imapConfig);
+    
+    console.log('🔍 DEBUG: Connexion en cours...');
     await client.connect();
     console.log('✅ Connexion IMAP établie avec contact@studyia.net');
     return client;
   } catch (error) {
-    console.error('❌ Erreur de connexion IMAP:', error);
+    console.error('❌ Erreur de connexion IMAP:', error.message);
+    console.error('❌ Détails:', error);
     throw error;
   }
 };

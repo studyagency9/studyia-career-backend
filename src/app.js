@@ -263,10 +263,10 @@ const startServer = async () => {
     const { initMailService } = require('./services/mailService');
     await initMailService();
     
-    // Initialiser le service IMAP (désactivé pour le moment)
-    // const { initImapService } = require('./services/imapService');
-    // await initImapService();
-    console.log('⚠️ Service IMAP désactivé temporairement');
+    // Initialiser le service IMAP
+    const { initImapService } = require('./services/imapService');
+    await initImapService();
+    console.log('✅ Service IMAP réactivé avec succès');
     
     // Démarrer le serveur
     app.listen(PORT, () => {

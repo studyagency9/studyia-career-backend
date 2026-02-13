@@ -67,96 +67,113 @@ const listEmails = async (options = {}) => {
   } = options;
 
   try {
-    await connectImap();
-    
-    // Sélectionner la boîte de réception
-    const mailbox = await client.mailboxOpen(folder);
-    console.log(`📧 Boîte sélectionnée: ${mailbox.name} (${mailbox.exists} messages)`);
+    // Timeout de 30 secondes pour éviter les blocages
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Timeout lors de la récupération des emails')), 30000);
+    });
 
-    // Construire la recherche
-    let searchCriteria = ['ALL']; // Toujours commencer avec ALL
-    
-    if (unreadOnly) {
-      searchCriteria = ['UNSEEN'];
-    }
-    
-    if (search) {
-      // Remplacer la recherche par une recherche combinée
-      searchCriteria = ['OR', ['SUBJECT', search], ['FROM', search], ['BODY', search]];
+    const emailsPromise = async () => {
+      await connectImap();
+      
+      // Sélectionner la boîte de réception
+      const mailbox = await client.mailboxOpen(folder);
+      console.log(`📧 Boîte sélectionnée: ${mailbox.name} (${mailbox.exists} messages)`);
+
+      // Construire la recherche
+      let searchCriteria = ['ALL']; // Toujours commencer avec ALL
+      
       if (unreadOnly) {
-        searchCriteria = ['AND', ['UNSEEN'], searchCriteria];
+        searchCriteria = ['UNSEEN'];
       }
-    }
+      
+      if (search) {
+        // Remplacer la recherche par une recherche combinée
+        searchCriteria = ['OR', ['SUBJECT', search], ['FROM', search], ['BODY', search]];
+        if (unreadOnly) {
+          searchCriteria = ['AND', ['UNSEEN'], searchCriteria];
+        }
+      }
 
-    // Récupérer les messages
-    let messages;
-    try {
-      console.log('🔍 DEBUG: Search criteria:', searchCriteria);
-      const searchResult = await client.search(searchCriteria);
-      messages = Array.isArray(searchResult) ? searchResult : [];
-      console.log('🔍 DEBUG: Search result:', messages.length, 'messages');
-    } catch (searchError) {
-      console.error('❌ Erreur recherche IMAP:', searchError.message);
-      // Fallback: récupérer tous les messages
+      // Récupérer les messages
+      let messages;
       try {
-        const fallbackResult = await client.search(['ALL']);
-        messages = Array.isArray(fallbackResult) ? fallbackResult : [];
-      } catch (fallbackError) {
-        console.error('❌ Erreur fallback IMAP:', fallbackError.message);
+        console.log('🔍 DEBUG: Search criteria:', searchCriteria);
+        const searchResult = await client.search(searchCriteria);
+        messages = Array.isArray(searchResult) ? searchResult : [];
+        console.log('🔍 DEBUG: Search result:', messages.length, 'messages');
+      } catch (searchError) {
+        console.error('❌ Erreur recherche IMAP:', searchError.message);
+        // Fallback: récupérer tous les messages avec UID range
+        try {
+          // Récupérer les UIDs de tous les messages
+          const mailbox = await client.mailboxOpen(folder);
+          const allUids = [];
+          for (let i = 1; i <= mailbox.exists; i++) {
+            allUids.push(i);
+          }
+          messages = allUids;
+          console.log('🔍 DEBUG: Fallback UIDs:', messages.length, 'messages');
+        } catch (fallbackError) {
+          console.error('❌ Erreur fallback IMAP:', fallbackError.message);
+          messages = [];
+        }
+      }
+
+      // S'assurer que messages est un tableau
+      if (!Array.isArray(messages)) {
+        console.error('❌ messages n\'est pas un tableau:', typeof messages, messages);
         messages = [];
       }
-    }
 
-    // S'assurer que messages est un tableau
-    if (!Array.isArray(messages)) {
-      console.error('❌ messages n\'est pas un tableau:', typeof messages, messages);
-      messages = [];
-    }
+      console.log('🔍 DEBUG: Messages trouvés:', messages.length);
 
-    console.log('🔍 DEBUG: Messages trouvés:', messages.length);
+      // Limiter et paginer
+      const startIndex = Math.max(0, messages.length - offset - limit);
+      const endIndex = messages.length - offset;
+      const paginatedMessages = messages.slice(startIndex, endIndex);
 
-    // Limiter et paginer
-    const startIndex = Math.max(0, messages.length - offset - limit);
-    const endIndex = messages.length - offset;
-    const paginatedMessages = messages.slice(startIndex, endIndex);
+      // Récupérer les détails des messages
+      const emails = [];
+      for (const uid of paginatedMessages) {
+        try {
+          const message = await client.fetchOne(uid, { envelope: true, flags: true, bodyStructure: true });
+          
+          const email = {
+            uid: uid,
+            messageId: message.envelope.messageId,
+            date: message.envelope.date,
+            subject: message.envelope.subject || '(Pas de sujet)',
+            from: message.envelope.from?.[0] || null,
+            to: message.envelope.to || [],
+            cc: message.envelope.cc || [],
+            flags: message.flags,
+            unread: !message.flags.includes('\\Seen'),
+            important: message.flags.includes('\\Flagged'),
+            body: '', // Ne pas récupérer le corps pour éviter timeout
+            hasAttachments: message.bodyStructure?.parts?.some(part => part.disposition === 'attachment') || false,
+            size: message.bodyStructure?.size || 0
+          };
 
-    // Récupérer les détails des messages
-    const emails = [];
-    for (const uid of paginatedMessages) {
-      const message = await client.fetchOne(uid, { envelope: true, flags: true, bodyStructure: true });
-      
-      // Récupérer le corps du message
-      const body = await client.fetchOne(uid, { bodyPart: '1' });
-      
-      const email = {
-        uid: uid,
-        messageId: message.envelope.messageId,
-        date: message.envelope.date,
-        subject: message.envelope.subject || '(Pas de sujet)',
-        from: message.envelope.from?.[0] || null,
-        to: message.envelope.to || [],
-        cc: message.envelope.cc || [],
-        flags: message.flags,
-        unread: !message.flags.includes('\\Seen'),
-        important: message.flags.includes('\\Flagged'),
-        body: body?.body?.toString() || '',
-        hasAttachments: message.bodyStructure?.parts?.some(part => part.disposition === 'attachment') || false,
-        size: message.bodyStructure?.size || 0
+          emails.push(email);
+        } catch (messageError) {
+          console.error(`❌ Erreur récupération message ${uid}:`, messageError.message);
+          // Continuer avec les autres messages
+        }
+      }
+
+      // Inverser pour avoir les plus récents en premier
+      emails.reverse();
+
+      return {
+        emails,
+        total: messages.length,
+        folder: mailbox.name,
+        unreadCount: mailbox.unseen
       };
-
-      emails.push(email);
-    }
-
-    // Inverser pour avoir les plus récents en premier
-    emails.reverse();
-
-    return {
-      emails,
-      total: messages.length,
-      folder: mailbox.name,
-      unreadCount: mailbox.unseen
     };
 
+    // Exécuter avec timeout
+    return await Promise.race([emailsPromise(), timeoutPromise]);
   } catch (error) {
     console.error('❌ Erreur lors de la lecture des emails:', error);
     throw error;

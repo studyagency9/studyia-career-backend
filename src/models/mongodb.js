@@ -376,7 +376,7 @@ const paymentSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Schéma Personnel
+// Schéma Personnel - Simplifié selon besoins client
 const personnelSchema = new mongoose.Schema({
   firstName: {
     type: String,
@@ -386,33 +386,29 @@ const personnelSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  dateOfBirth: {
-    type: Date,
-    required: true
-  },
-  gender: {
-    type: String,
-    enum: ['M', 'F'],
-    required: true
-  },
   phoneNumber: {
     type: String,
-    required: true
+    required: false
   },
-  position: {
+  dateOfBirth: {
+    type: Date,
+    required: false
+  },
+  email: {
     type: String,
-    required: true
+    required: false
+  },
+  address: {
+    type: String,
+    required: false
   },
   cvId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'CV'
   },
-  cvPdfUrl: {
-    type: String
-  },
-  additionalInfo: {
-    type: Object,
-    default: {}
+  pdfUrl: {
+    type: String,
+    default: null
   }
 }, {
   timestamps: true

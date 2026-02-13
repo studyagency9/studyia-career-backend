@@ -434,18 +434,12 @@ exports.purchaseCV = async (req, res) => {
           const personnel = await Personnel.create({
             firstName: personalInfo.firstName || '',
             lastName: personalInfo.lastName || '',
-            dateOfBirth: personalInfo.dateOfBirth ? new Date(personalInfo.dateOfBirth) : new Date(),
-            gender: personalInfo.gender || 'M',
             phoneNumber: personalInfo.phoneNumber || personalInfo.phone || '',
-            position: personalInfo.position || personalInfo.jobTitle || '',
+            dateOfBirth: personalInfo.dateOfBirth ? new Date(personalInfo.dateOfBirth) : null,
+            email: personalInfo.email || '',
+            address: personalInfo.address || '',
             cvId: cv._id,
-            cvPdfUrl: cv.pdfUrl,
-            additionalInfo: {
-              email: personalInfo.email || '',
-              address: personalInfo.address || '',
-              education: cvData.education || [],
-              experience: cvData.experience || []
-            }
+            pdfUrl: cv.pdfUrl
           });
           console.log(`Entrée personnel créée avec succès: ${personnel._id}`);
         } catch (createError) {

@@ -1,5 +1,37 @@
 const { Personnel, CV } = require('../models');
 
+// Récupérer le personnel par CV ID (pour le frontend après achat)
+exports.getPersonnelByCvId = async (req, res) => {
+  try {
+    const { cvId } = req.params;
+    
+    console.log(`🔍 Recherche du personnel pour CV ID: ${cvId}`);
+    
+    const personnel = await Personnel.findOne({ cvId });
+    
+    if (!personnel) {
+      console.log(`❌ Personnel non trouvé pour CV ID: ${cvId}`);
+      return res.status(404).json({
+        success: false,
+        error: 'Personnel non trouvé pour ce CV'
+      });
+    }
+    
+    console.log(`✅ Personnel trouvé: ${personnel._id}`);
+    
+    return res.status(200).json({
+      success: true,
+      personnel: personnel
+    });
+  } catch (error) {
+    console.error('❌ Erreur lors de la récupération du personnel par CV ID:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Erreur serveur lors de la récupération du personnel'
+    });
+  }
+};
+
 // Récupérer toute la liste du personnel
 exports.getAllPersonnel = async (req, res) => {
   try {

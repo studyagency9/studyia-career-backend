@@ -9,9 +9,14 @@ const imapConfig = {
     user: 'contact@studyia.net',
     pass: process.env.MAIL_PASSWORD,
   },
+  // Ajouter des timeouts pour éviter les crashes
+  socketTimeout: 300000, // 5 minutes
+  connectTimeout: 30000, // 30 secondes
+  idleTimeout: 300000, // 5 minutes
 };
 
 let client = null;
+let isReconnecting = false;
 
 // Connexion au serveur IMAP
 const connectImap = async () => {
@@ -29,17 +34,85 @@ const connectImap = async () => {
       return client;
     }
 
-    console.log('🔍 DEBUG: Création du client IMAP...');
+    if (isReconnecting) {
+      console.log('� Reconnexion déjà en cours...');
+      return client;
+    }
+
+    console.log('� DEBUG: Création du client IMAP...');
     client = new ImapFlow(imapConfig);
+    
+    // Gérer les erreurs de timeout
+    client.on('error', (error) => {
+      console.error('❌ Erreur IMAP:', error.message);
+      if (error.code === 'ETIMEOUT' || error.code === 'ESOCKET') {
+        console.log('🔄 Tentative de reconnexion...');
+        handleReconnection();
+      }
+    });
+
+    client.on('close', () => {
+      console.log('🔌 Connexion IMAP fermée');
+      if (!isReconnecting) {
+        handleReconnection();
+      }
+    });
     
     console.log('🔍 DEBUG: Connexion en cours...');
     await client.connect();
     console.log('✅ Connexion IMAP établie avec contact@studyia.net');
+    
+    // Envoyer un commande KEEPALIVE toutes les 2 minutes
+    setInterval(async () => {
+      if (client && client.usable) {
+        try {
+          await client.noop();
+          console.log('🔄 Keepalive IMAP envoyé');
+        } catch (error) {
+          console.error('❌ Erreur keepalive:', error.message);
+        }
+      }
+    }, 120000); // 2 minutes
+    
     return client;
   } catch (error) {
     console.error('❌ Erreur de connexion IMAP:', error.message);
     console.error('❌ Détails:', error);
     throw error;
+  }
+};
+
+// Gérer la reconnexion automatique
+const handleReconnection = async () => {
+  if (isReconnecting) return;
+  
+  isReconnecting = true;
+  console.log('🔄 Début de la reconnexion IMAP...');
+  
+  try {
+    if (client) {
+      try {
+        await client.logout();
+      } catch (error) {
+        console.log('🔌 Client déjà déconnecté');
+      }
+      client = null;
+    }
+    
+    // Attendre 5 secondes avant de se reconnecter
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    
+    await connectImap();
+    console.log('✅ Reconnexion IMAP réussie');
+  } catch (error) {
+    console.error('❌ Erreur de reconnexion:', error.message);
+    // Réessayer dans 30 secondes
+    setTimeout(() => {
+      isReconnecting = false;
+      handleReconnection();
+    }, 30000);
+  } finally {
+    isReconnecting = false;
   }
 };
 
@@ -73,6 +146,12 @@ const listEmails = async (options = {}) => {
     });
 
     const emailsPromise = async () => {
+      // Vérifier la connexion avant de continuer
+      if (!client || !client.usable) {
+        console.log('🔄 Client IMAP déconnecté, tentative de reconnexion...');
+        await connectImap();
+      }
+      
       await connectImap();
       
       // Sélectionner la boîte de réception

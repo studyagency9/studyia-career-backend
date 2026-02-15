@@ -158,25 +158,10 @@ const listEmails = async (options = {}) => {
       const mailbox = await client.mailboxOpen(folder);
       console.log(`📧 Boîte sélectionnée: ${mailbox.name} (${mailbox.exists} messages)`);
 
-      // Construire la recherche
-      let searchCriteria = ['1:*']; // Tous les messages par UID range
-      
-      if (unreadOnly) {
-        searchCriteria = ['UNSEEN'];
-      }
-      
-      if (search) {
-        // Remplacer la recherche par une recherche combinée
-        searchCriteria = ['OR', ['SUBJECT', search], ['FROM', search], ['BODY', search]];
-        if (unreadOnly) {
-          searchCriteria = ['AND', ['UNSEEN'], searchCriteria];
-        }
-      }
-
-      // Récupérer les messages - CORRECTION COMPLÈTE pour imapflow
+      // Récupérer les messages - CORRECTION FINALE
       let messages;
       try {
-        console.log('🔍 DEBUG: Récupération UIDs avec imapflow syntaxe correcte');
+        console.log('🔍 DEBUG: Récupération UIDs avec imapflow');
         
         // Étape 1: Ouvrir la boîte mail
         const mailbox = await client.mailboxOpen(folder);
@@ -217,23 +202,13 @@ const listEmails = async (options = {}) => {
         }
       } catch (searchError) {
         console.error('❌ Erreur SEARCH IMAP:', searchError.message);
+        console.log('🔍 DEBUG: Fallback - utilisation search({ all: true })');
         
-        // Fallback correct : utiliser uidNext et uidValidity
+        // CORRECTION : Fallback simple et fiable
         try {
-          console.log('🔍 DEBUG: Fallback - calcul UIDs depuis mailbox.uidNext');
-          const mailbox = await client.mailboxOpen(folder);
-          
-          if (mailbox.exists && mailbox.exists > 0 && mailbox.uidNext) {
-            // Calcul correct des UIDs : uidNext - exists = premier UID
-            const firstUid = mailbox.uidNext - mailbox.exists;
-            messages = [];
-            for (let i = 0; i < mailbox.exists; i++) {
-              messages.push(firstUid + i);
-            }
-            console.log('🔍 DEBUG: UIDs calculés (fallback):', messages.length, 'de', firstUid, 'à', messages[messages.length - 1]);
-          } else {
-            messages = [];
-          }
+          const fallbackResult = await client.search({ all: true });
+          messages = Array.isArray(fallbackResult) ? fallbackResult : [];
+          console.log('🔍 DEBUG: Fallback UIDs trouvés:', messages.length, messages.slice(0, 5));
         } catch (fallbackError) {
           console.error('❌ Erreur fallback:', fallbackError.message);
           messages = [];
@@ -248,16 +223,19 @@ const listEmails = async (options = {}) => {
 
       console.log('🔍 DEBUG: Messages trouvés:', messages.length);
 
-      // Limiter et paginer
-      const startIndex = Math.max(0, messages.length - offset - limit);
-      const endIndex = messages.length - offset;
-      const paginatedMessages = messages.slice(startIndex, endIndex);
+      // CORRECTION : Trier les UIDs du plus récent au plus ancien
+      messages = messages.sort((a, b) => b - a);
+      console.log('🔍 DEBUG: UIDs triés (plus récents d\'abord):', messages.slice(0, 5));
+
+      // CORRECTION : Pagination simple sur UIDs triés
+      const pageUids = messages.slice(offset, offset + limit);
+      console.log('🔍 DEBUG: UIDs pour cette page:', pageUids.length, pageUids);
 
       // Récupérer les détails des messages
       const emails = [];
-      for (const uid of paginatedMessages) {
+      for (const uid of pageUids) {
         try {
-          // CORRECTION : Ajouter uid: true pour imapflow
+          // CORRECTION : Forcer le mode UID dans fetchOne
           const message = await client.fetchOne(uid, { 
             uid: true,
             envelope: true, 
@@ -287,9 +265,6 @@ const listEmails = async (options = {}) => {
           // Continuer avec les autres messages
         }
       }
-
-      // Inverser pour avoir les plus récents en premier
-      emails.reverse();
 
       return {
         emails,

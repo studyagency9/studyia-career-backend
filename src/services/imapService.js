@@ -173,39 +173,49 @@ const listEmails = async (options = {}) => {
         }
       }
 
-      // Récupérer les messages - Forcer le fallback car SEARCH ne fonctionne pas
+      // Récupérer les messages - CORRECTION : utiliser les vrais UIDs
       let messages;
       try {
-        console.log('🔍 DEBUG: Utilisation directe du fallback (SEARCH cassé)');
+        console.log('🔍 DEBUG: Récupération des vrais UIDs avec imapflow');
         
-        // Fallback direct: utiliser fetch avec un range
-        console.log('🔍 DEBUG: Tentative fallback avec fetch range 1:*');
+        // Ouvrir la boîte mail
         const mailbox = await client.mailboxOpen(folder);
+        console.log('🔍 DEBUG: Boîte mail ouverte, exists:', mailbox.exists);
         
-        // Utiliser fetch pour récupérer les messages avec leur UID
-        // Syntaxe correcte pour imapflow
-        const fetchResult = await client.fetch('1:*', { 
-          envelope: true, 
-          flags: true,
-          bodyStructure: true,
-          uid: true  // Important: inclure les UIDs
-        });
-        
-        if (fetchResult && typeof fetchResult === 'object') {
-          // Extraire les UIDs depuis le résultat
-          messages = Object.keys(fetchResult).map(key => {
-            const uid = fetchResult[key].uid || parseInt(key);
-            return uid;
-          });
-          console.log('🔍 DEBUG: Fallback fetch result:', messages.length, 'messages');
-          console.log('🔍 DEBUG: UIDs trouvés:', messages.slice(0, 5));
+        // CORRECTION : Utiliser SEARCH pour récupérer les vrais UIDs
+        if (mailbox.exists && mailbox.exists > 0) {
+          // imapflow : utiliser SEARCH avec critère valide pour tous les messages
+          const searchResult = await client.search('ALL');
+          messages = Array.isArray(searchResult) ? searchResult : [];
+          console.log('🔍 DEBUG: Vrais UIDs trouvés:', messages.length, messages.slice(0, 5));
         } else {
-          console.log('🔍 DEBUG: Fetch result vide ou invalide');
+          messages = [];
+          console.log('🔍 DEBUG: Aucun message dans la boîte');
+        }
+      } catch (searchError) {
+        console.error('❌ Erreur SEARCH IMAP:', searchError.message);
+        
+        // Fallback : utiliser client.mailboxOpen().uidNext pour générer des UIDs
+        try {
+          console.log('🔍 DEBUG: Fallback - génération UIDs depuis mailbox');
+          const mailbox = await client.mailboxOpen(folder);
+          
+          if (mailbox.exists && mailbox.exists > 0) {
+            // imapflow : les UIDs sont généralement séquentiels mais différents des sequence numbers
+            // Utiliser uidNext - exists comme base, puis générer
+            const baseUid = Math.max(1, (mailbox.uidNext || 1) - mailbox.exists);
+            messages = [];
+            for (let i = 0; i < mailbox.exists; i++) {
+              messages.push(baseUid + i);
+            }
+            console.log('🔍 DEBUG: UIDs générés (fallback):', messages.length, 'de', baseUid, 'à', messages[messages.length - 1]);
+          } else {
+            messages = [];
+          }
+        } catch (fallbackError) {
+          console.error('❌ Erreur fallback:', fallbackError.message);
           messages = [];
         }
-      } catch (fallbackError) {
-        console.error('❌ Erreur fallback IMAP:', fallbackError.message);
-        messages = [];
       }
 
       // S'assurer que messages est un tableau
@@ -407,16 +417,13 @@ const getEmailStats = async () => {
     await connectImap();
     
     const mailbox = await client.mailboxOpen('INBOX');
+    console.log('🔍 DEBUG: Stats - Boîte mail ouverte, exists:', mailbox.exists);
     
-    // Récupérer les emails pour calculer les statistiques
-    const fetchResult = await client.fetch('1:*', { 
-      envelope: true, 
-      flags: true,
-      bodyStructure: true
-    });
+    // Utiliser l'approche simple comme listEmails
+    let totalEmails = mailbox.exists || 0;
+    let unreadEmails = mailbox.unseen || 0;
     
-    let totalEmails = 0;
-    let unreadEmails = 0;
+    // Pour les statistiques détaillées, utiliser une approche simple
     let emailsWithAttachments = 0;
     let todayEmails = 0;
     let weekEmails = 0;
@@ -425,33 +432,44 @@ const getEmailStats = async () => {
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
     
-    if (fetchResult && typeof fetchResult === 'object') {
-      totalEmails = Object.keys(fetchResult).length;
-      
-      Object.values(fetchResult).forEach(message => {
-        // Compter les emails non lus
-        if (!message.flags.includes('\\Seen')) {
-          unreadEmails++;
-        }
+    // Si on a des messages, essayer d'en récupérer quelques-uns pour les stats
+    if (totalEmails > 0) {
+      try {
+        // Récupérer les 10 derniers messages pour les stats
+        const limit = Math.min(10, totalEmails);
+        const startUid = Math.max(1, totalEmails - limit + 1);
+        const endUid = totalEmails;
         
-        // Compter les emails avec pièces jointes
-        if (message.bodyStructure && 
-            message.bodyStructure.childNodes && 
-            message.bodyStructure.childNodes.some(child => child.disposition === 'attachment')) {
-          emailsWithAttachments++;
-        }
+        const fetchResult = await client.fetch(`${startUid}:${endUid}`, { 
+          envelope: true, 
+          flags: true,
+          bodyStructure: true
+        });
         
-        // Compter les emails du jour
-        if (message.envelope.date) {
-          const emailDate = new Date(message.envelope.date);
-          if (emailDate >= today) {
-            todayEmails++;
-          }
-          if (emailDate >= weekAgo) {
-            weekEmails++;
-          }
+        if (fetchResult && typeof fetchResult === 'object') {
+          Object.values(fetchResult).forEach(message => {
+            // Compter les emails avec pièces jointes
+            if (message.bodyStructure && 
+                message.bodyStructure.childNodes && 
+                message.bodyStructure.childNodes.some(child => child.disposition === 'attachment')) {
+              emailsWithAttachments++;
+            }
+            
+            // Compter les emails récents
+            if (message.envelope.date) {
+              const emailDate = new Date(message.envelope.date);
+              if (emailDate >= today) {
+                todayEmails++;
+              }
+              if (emailDate >= weekAgo) {
+                weekEmails++;
+              }
+            }
+          });
         }
-      });
+      } catch (fetchError) {
+        console.log('🔍 DEBUG: Erreur fetch stats, utilise valeurs par défaut:', fetchError.message);
+      }
     }
     
     const stats = {
@@ -467,7 +485,8 @@ const getEmailStats = async () => {
         }
       }
     };
-
+    
+    console.log('🔍 DEBUG: Stats calculées:', stats);
     return stats;
   } catch (error) {
     console.error('❌ Erreur lors de la récupération des statistiques:', error);

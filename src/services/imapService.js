@@ -401,6 +401,80 @@ const getMailboxStats = async (folder = 'INBOX') => {
   }
 };
 
+// Statistiques complètes pour le frontend
+const getEmailStats = async () => {
+  try {
+    await connectImap();
+    
+    const mailbox = await client.mailboxOpen('INBOX');
+    
+    // Récupérer les emails pour calculer les statistiques
+    const fetchResult = await client.fetch('1:*', { 
+      envelope: true, 
+      flags: true,
+      bodyStructure: true
+    });
+    
+    let totalEmails = 0;
+    let unreadEmails = 0;
+    let emailsWithAttachments = 0;
+    let todayEmails = 0;
+    let weekEmails = 0;
+    
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    
+    if (fetchResult && typeof fetchResult === 'object') {
+      totalEmails = Object.keys(fetchResult).length;
+      
+      Object.values(fetchResult).forEach(message => {
+        // Compter les emails non lus
+        if (!message.flags.includes('\\Seen')) {
+          unreadEmails++;
+        }
+        
+        // Compter les emails avec pièces jointes
+        if (message.bodyStructure && 
+            message.bodyStructure.childNodes && 
+            message.bodyStructure.childNodes.some(child => child.disposition === 'attachment')) {
+          emailsWithAttachments++;
+        }
+        
+        // Compter les emails du jour
+        if (message.envelope.date) {
+          const emailDate = new Date(message.envelope.date);
+          if (emailDate >= today) {
+            todayEmails++;
+          }
+          if (emailDate >= weekAgo) {
+            weekEmails++;
+          }
+        }
+      });
+    }
+    
+    const stats = {
+      total: totalEmails,
+      unread: unreadEmails,
+      withAttachments: emailsWithAttachments,
+      today: todayEmails,
+      lastWeek: weekEmails,
+      mailboxes: {
+        INBOX: {
+          total: mailbox.exists,
+          unread: mailbox.unseen
+        }
+      }
+    };
+
+    return stats;
+  } catch (error) {
+    console.error('❌ Erreur lors de la récupération des statistiques:', error);
+    throw error;
+  }
+};
+
 // Initialiser le service IMAP
 const initImapService = async () => {
   try {
@@ -421,5 +495,6 @@ module.exports = {
   markEmail,
   deleteEmail,
   getMailboxStats,
+  getEmailStats,
   initImapService
 };

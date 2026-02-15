@@ -173,19 +173,42 @@ const listEmails = async (options = {}) => {
         }
       }
 
-      // Récupérer les messages - CORRECTION : utiliser les vrais UIDs
+      // Récupérer les messages - CORRECTION COMPLÈTE pour imapflow
       let messages;
       try {
-        console.log('🔍 DEBUG: Récupération des vrais UIDs avec imapflow');
+        console.log('🔍 DEBUG: Récupération UIDs avec imapflow syntaxe correcte');
         
-        // Ouvrir la boîte mail
+        // Étape 1: Ouvrir la boîte mail
         const mailbox = await client.mailboxOpen(folder);
-        console.log('🔍 DEBUG: Boîte mail ouverte, exists:', mailbox.exists);
+        console.log('🔍 DEBUG: Boîte mail ouverte, exists:', mailbox.exists, 'uidNext:', mailbox.uidNext, 'uidValidity:', mailbox.uidValidity);
         
-        // CORRECTION : Utiliser SEARCH pour récupérer les vrais UIDs
+        // Étape 2: SEARCH avec syntaxe imapflow correcte
         if (mailbox.exists && mailbox.exists > 0) {
-          // imapflow : utiliser SEARCH avec critère valide pour tous les messages
-          const searchResult = await client.search('ALL');
+          let searchCriteria = { uid: true }; // Par défaut: tous les messages
+          
+          if (unreadOnly) {
+            searchCriteria = { seen: false, uid: true };
+          }
+          
+          if (search) {
+            searchCriteria = { 
+              or: [
+                { subject: search },
+                { from: search },
+                { body: search }
+              ],
+              uid: true
+            };
+            if (unreadOnly) {
+              searchCriteria = { 
+                and: [{ seen: false }, searchCriteria],
+                uid: true
+              };
+            }
+          }
+          
+          console.log('🔍 DEBUG: Search criteria:', searchCriteria);
+          const searchResult = await client.search(searchCriteria);
           messages = Array.isArray(searchResult) ? searchResult : [];
           console.log('🔍 DEBUG: Vrais UIDs trouvés:', messages.length, messages.slice(0, 5));
         } else {
@@ -195,20 +218,19 @@ const listEmails = async (options = {}) => {
       } catch (searchError) {
         console.error('❌ Erreur SEARCH IMAP:', searchError.message);
         
-        // Fallback : utiliser client.mailboxOpen().uidNext pour générer des UIDs
+        // Fallback correct : utiliser uidNext et uidValidity
         try {
-          console.log('🔍 DEBUG: Fallback - génération UIDs depuis mailbox');
+          console.log('🔍 DEBUG: Fallback - calcul UIDs depuis mailbox.uidNext');
           const mailbox = await client.mailboxOpen(folder);
           
-          if (mailbox.exists && mailbox.exists > 0) {
-            // imapflow : les UIDs sont généralement séquentiels mais différents des sequence numbers
-            // Utiliser uidNext - exists comme base, puis générer
-            const baseUid = Math.max(1, (mailbox.uidNext || 1) - mailbox.exists);
+          if (mailbox.exists && mailbox.exists > 0 && mailbox.uidNext) {
+            // Calcul correct des UIDs : uidNext - exists = premier UID
+            const firstUid = mailbox.uidNext - mailbox.exists;
             messages = [];
             for (let i = 0; i < mailbox.exists; i++) {
-              messages.push(baseUid + i);
+              messages.push(firstUid + i);
             }
-            console.log('🔍 DEBUG: UIDs générés (fallback):', messages.length, 'de', baseUid, 'à', messages[messages.length - 1]);
+            console.log('🔍 DEBUG: UIDs calculés (fallback):', messages.length, 'de', firstUid, 'à', messages[messages.length - 1]);
           } else {
             messages = [];
           }
@@ -235,7 +257,13 @@ const listEmails = async (options = {}) => {
       const emails = [];
       for (const uid of paginatedMessages) {
         try {
-          const message = await client.fetchOne(uid, { envelope: true, flags: true, bodyStructure: true });
+          // CORRECTION : Ajouter uid: true pour imapflow
+          const message = await client.fetchOne(uid, { 
+            uid: true,
+            envelope: true, 
+            flags: true, 
+            bodyStructure: true 
+          });
           
           const email = {
             uid: uid,

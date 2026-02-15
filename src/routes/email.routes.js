@@ -11,7 +11,7 @@ const {
 } = require('../services/imapService');
 
 // Route principale pour lister les emails (admin seulement)
-router.get('/emails', authenticateAdmin, async (req, res) => {
+router.get('/', authenticateAdmin, async (req, res) => {
   try {
     console.log('🔍 DEBUG: Route /emails appelée');
     console.log('🔍 DEBUG: User authentifié:', !!req.user);
@@ -55,7 +55,7 @@ router.get('/emails', authenticateAdmin, async (req, res) => {
 });
 
 // Route pour récupérer un email spécifique (admin seulement)
-router.get('/emails/:uid', authenticateAdmin, async (req, res) => {
+router.get('/:uid', authenticateAdmin, async (req, res) => {
   try {
     const { uid } = req.params;
     
@@ -143,7 +143,7 @@ router.delete('/emails/:uid', authenticateAdmin, async (req, res) => {
 });
 
 // Route pour obtenir les statistiques de la boîte mail (admin seulement)
-router.get('/emails/stats', authenticateAdmin, async (req, res) => {
+router.get('/stats', authenticateAdmin, async (req, res) => {
   try {
     const { folder = 'INBOX' } = req.query;
     
@@ -165,7 +165,7 @@ router.get('/emails/stats', authenticateAdmin, async (req, res) => {
 });
 
 // Route de santé pour le service IMAP (admin seulement)
-router.get('/emails/health', authenticateAdmin, async (req, res) => {
+router.get('/health', authenticateAdmin, async (req, res) => {
   try {
     console.log('🔍 DEBUG: Vérification santé IMAP...');
     
@@ -202,7 +202,7 @@ router.get('/emails/health', authenticateAdmin, async (req, res) => {
 });
 
 // Route pour tester la connexion IMAP (admin seulement)
-router.post('/emails/test', authenticateAdmin, async (req, res) => {
+router.post('/test', authenticateAdmin, async (req, res) => {
   try {
     const { testFolder = 'INBOX' } = req.body;
     

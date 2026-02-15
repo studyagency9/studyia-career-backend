@@ -103,8 +103,7 @@ app.use('/api/personnel', personnelRoutes);
 app.use('/api/admin/users', adminManagementRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api', contactRoutes); // Routes publiques de contact
-app.use('/api/emails', emailRoutes); // Routes admin pour la lecture des emails (direct /api/emails)
-app.use('/api/admin', emailRoutes); // Routes admin pour la lecture des emails (sous /api/admin)
+app.use('/api/admin', emailRoutes); // Routes admin pour la lecture des emails
 app.use('/api/pdfs', pdfRoutes); // 🆕 Routes upload PDF
 
 // Route spécifique pour la compatibilité avec le frontend (sans 's' à cv)
@@ -264,10 +263,10 @@ const startServer = async () => {
     const { initMailService } = require('./services/mailService');
     await initMailService();
     
-    // Initialiser le service IMAP
-    const { initImapService } = require('./services/imapService');
-    await initImapService();
-    console.log('✅ Service IMAP réactivé avec succès');
+    // Initialiser le service IMAP (désactivé pour le moment)
+    // const { initImapService } = require('./services/imapService');
+    // await initImapService();
+    console.log('⚠️ Service IMAP désactivé temporairement');
     
     // Démarrer le serveur
     app.listen(PORT, () => {

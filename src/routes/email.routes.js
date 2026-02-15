@@ -147,7 +147,9 @@ router.get('/stats', authenticateAdmin, async (req, res) => {
   try {
     const { folder = 'INBOX' } = req.query;
     
-    const stats = await getMailboxStats(folder);
+    // Importer le service IMAP pour les stats
+    const imapService = require('../services/imapService');
+    const stats = await imapService.getEmailStats();
 
     res.status(200).json({
       success: true,

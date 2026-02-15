@@ -159,7 +159,7 @@ const listEmails = async (options = {}) => {
       console.log(`📧 Boîte sélectionnée: ${mailbox.name} (${mailbox.exists} messages)`);
 
       // Construire la recherche
-      let searchCriteria = ['ALL']; // Toujours commencer avec ALL
+      let searchCriteria = ['1:*']; // Tous les messages par UID range
       
       if (unreadOnly) {
         searchCriteria = ['UNSEEN'];
@@ -173,29 +173,39 @@ const listEmails = async (options = {}) => {
         }
       }
 
-      // Récupérer les messages
+      // Récupérer les messages - Forcer le fallback car SEARCH ne fonctionne pas
       let messages;
       try {
-        console.log('🔍 DEBUG: Search criteria:', searchCriteria);
-        const searchResult = await client.search(searchCriteria);
-        messages = Array.isArray(searchResult) ? searchResult : [];
-        console.log('🔍 DEBUG: Search result:', messages.length, 'messages');
-      } catch (searchError) {
-        console.error('❌ Erreur recherche IMAP:', searchError.message);
-        // Fallback: récupérer tous les messages avec UID range
-        try {
-          // Récupérer les UIDs de tous les messages
-          const mailbox = await client.mailboxOpen(folder);
-          const allUids = [];
-          for (let i = 1; i <= mailbox.exists; i++) {
-            allUids.push(i);
-          }
-          messages = allUids;
-          console.log('🔍 DEBUG: Fallback UIDs:', messages.length, 'messages');
-        } catch (fallbackError) {
-          console.error('❌ Erreur fallback IMAP:', fallbackError.message);
+        console.log('🔍 DEBUG: Utilisation directe du fallback (SEARCH cassé)');
+        
+        // Fallback direct: utiliser fetch avec un range
+        console.log('🔍 DEBUG: Tentative fallback avec fetch range 1:*');
+        const mailbox = await client.mailboxOpen(folder);
+        
+        // Utiliser fetch pour récupérer les messages avec leur UID
+        // Syntaxe correcte pour imapflow
+        const fetchResult = await client.fetch('1:*', { 
+          envelope: true, 
+          flags: true,
+          bodyStructure: true,
+          uid: true  // Important: inclure les UIDs
+        });
+        
+        if (fetchResult && typeof fetchResult === 'object') {
+          // Extraire les UIDs depuis le résultat
+          messages = Object.keys(fetchResult).map(key => {
+            const uid = fetchResult[key].uid || parseInt(key);
+            return uid;
+          });
+          console.log('🔍 DEBUG: Fallback fetch result:', messages.length, 'messages');
+          console.log('🔍 DEBUG: UIDs trouvés:', messages.slice(0, 5));
+        } else {
+          console.log('🔍 DEBUG: Fetch result vide ou invalide');
           messages = [];
         }
+      } catch (fallbackError) {
+        console.error('❌ Erreur fallback IMAP:', fallbackError.message);
+        messages = [];
       }
 
       // S'assurer que messages est un tableau

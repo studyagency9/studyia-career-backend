@@ -42,6 +42,10 @@ const partnerSchema = new mongoose.Schema({
     enum: ['starter', 'pro', 'business'],
     default: 'pro'
   },
+  planPrice: {
+    type: Number,
+    required: false
+  },
   // Quota de CV selon le plan
   cvQuota: {
     type: Number,

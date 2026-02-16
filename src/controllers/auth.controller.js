@@ -69,6 +69,7 @@ exports.signup = async (req, res) => {
           lastName: partner.lastName,
           company: partner.company,
           plan: partner.plan,
+          planPrice: partner.planPrice || 0, // ✅ Ajout du prix
           cvQuota: cvQuota,
           cvUsedThisMonth: cvUsed,
           cvStats: cvStats,
@@ -149,6 +150,7 @@ exports.login = async (req, res) => {
           lastName: partner.lastName,
           company: partner.company,
           plan: partner.plan,
+          planPrice: partner.planPrice || 0, // ✅ Ajout du prix
           cvQuota: cvQuota,
           cvUsedThisMonth: cvUsed,
           cvStats: cvStats,

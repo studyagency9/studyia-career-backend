@@ -386,7 +386,7 @@ exports.getAllPartners = async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(parseInt(offset))
       .limit(parseInt(limit))
-      .select('id email firstName lastName company phone country city plan cvQuota cvUsedThisMonth planRenewalDate createdAt');
+      .select('id email firstName lastName company phone country city plan planPrice cvQuota cvUsedThisMonth planRenewalDate createdAt');
     
     // Calculer les stats pour chaque partner
     const quotas = { starter: 10, pro: 50, business: 200 };
@@ -738,6 +738,10 @@ exports.createPartner = async (req, res) => {
     const quotas = { starter: 10, pro: 50, business: 200 };
     const cvQuota = quotas[plan] || 50;
     
+    // Récupérer le prix du plan depuis la collection Plan
+    const planDetails = await Plan.findOne({ type: plan });
+    const planPrice = planDetails ? planDetails.price : 0;
+    
     const partner = await Partner.create({
       firstName,
       lastName,
@@ -748,6 +752,7 @@ exports.createPartner = async (req, res) => {
       city,
       passwordHash: password, // Sera hashé automatiquement par le middleware
       plan,
+      planPrice, // Ajouter le prix du plan
       cvQuota, // Ajouter le quota explicitement
       planRenewalDate: new Date(new Date().setMonth(new Date().getMonth() + 1)), // Prochain mois
       cvUsedThisMonth: 0,

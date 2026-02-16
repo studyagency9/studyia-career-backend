@@ -311,64 +311,59 @@ const getEmail = async (uid) => {
     
     console.log('🔍 DEBUG: getEmail appelé pour UID:', uid);
     
+    // Ouvrir la boîte mail
+    await client.mailboxOpen('INBOX');
+    
+    // Récupérer le message avec source pour mailparser
     const message = await client.fetchOne(uid, { 
+      uid: true,
       envelope: true, 
       flags: true, 
-      bodyStructure: true
+      internalDate: true, 
+      source: true 
     });
     
     console.log('🔍 DEBUG: Message fetchOne result:', !!message);
-    console.log('🔍 DEBUG: Message keys:', message ? Object.keys(message) : 'null');
     
     if (!message) {
       throw new Error('Message non trouvé');
     }
     
-    // Récupérer le corps du message séparément
-    let body = '';
-    let htmlBody = '';
+    // Parser le message avec mailparser
+    const parsed = await simpleParser(message.source);
     
-    try {
-      // Essayer de récupérer le corps texte
-      const textBody = await client.fetchOne(uid, { bodyPart: '1' });
-      if (textBody && textBody.body) {
-        body = textBody.body.toString();
+    // Gérer les flags correctement
+    const flagsArray = Array.isArray(message.flags) ? message.flags : [];
+    
+    // Extraire les pièces jointes avec contenu
+    const attachments = [];
+    if (parsed.attachments && parsed.attachments.length > 0) {
+      for (const attachment of parsed.attachments) {
+        attachments.push({
+          filename: attachment.filename,
+          contentType: attachment.contentType,
+          size: attachment.size,
+          content: attachment.content // Buffer avec le contenu binaire
+        });
       }
-    } catch (bodyError) {
-      console.log('🔍 DEBUG: Impossible de récupérer le corps texte:', bodyError.message);
     }
-    
-    try {
-      // Essayer de récupérer le corps HTML
-      const htmlPart = await client.fetchOne(uid, { bodyPart: '2' });
-      if (htmlPart && htmlPart.body) {
-        htmlBody = htmlPart.body.toString();
-      }
-    } catch (htmlError) {
-      console.log('🔍 DEBUG: Impossible de récupérer le corps HTML:', htmlError.message);
-    }
-    
-    // Détecter les pièces jointes
-    const hasAttachments = message.bodyStructure && 
-      message.bodyStructure.childNodes && 
-      message.bodyStructure.childNodes.some(child => child.disposition === 'attachment');
     
     return {
       uid: uid,
-      messageId: message.envelope.messageId,
-      date: message.envelope.date,
-      subject: message.envelope.subject || '(Pas de sujet)',
-      from: message.envelope.from?.[0] || null,
-      to: message.envelope.to || [],
-      cc: message.envelope.cc || [],
-      flags: message.flags,
-      unread: !message.flags.includes('\\Seen'),
-      important: message.flags.includes('\\Flagged'),
-      body,
-      htmlBody,
-      hasAttachments,
-      size: message.size || 0,
-      attachments: [] // Sera implémenté si nécessaire
+      messageId: parsed.messageId,
+      date: message.internalDate || parsed.date,
+      subject: parsed.subject || '(Pas de sujet)',
+      from: parsed.from?.value?.[0] || null,
+      to: parsed.to?.value || [],
+      cc: parsed.cc?.value || [],
+      flags: flagsArray,
+      unread: !flagsArray.includes('\\Seen'),
+      important: flagsArray.includes('\\Flagged'),
+      body: parsed.text || parsed.html || '',
+      htmlBody: parsed.html || '',
+      hasAttachments: attachments.length > 0,
+      attachments,
+      size: message.source ? message.source.length : 0
     };
     
   } catch (error) {
@@ -425,37 +420,32 @@ const getEmailStats = async () => {
     if (totalEmails > 0) {
       try {
         // Récupérer les 10 derniers messages pour les stats
-        const limit = Math.min(10, totalEmails);
-        const startUid = Math.max(1, totalEmails - limit + 1);
-        const endUid = totalEmails;
+        const uids = await client.search({ all: true });
+        const recentUids = uids.slice(-10); // 10 plus récents
         
-        const fetchResult = await client.fetch(`${startUid}:${endUid}`, { 
+        for await (const message of client.fetch(recentUids, { 
           envelope: true, 
           flags: true,
           bodyStructure: true,
           uid: true
-        });
-        
-        if (fetchResult && typeof fetchResult === 'object') {
-          Object.values(fetchResult).forEach(message => {
-            // Compter les emails avec pièces jointes
-            if (message.bodyStructure && 
-                message.bodyStructure.childNodes && 
-                message.bodyStructure.childNodes.some(child => child.disposition === 'attachment')) {
-              emailsWithAttachments++;
+        })) {
+          // Compter les emails avec pièces jointes
+          if (message.bodyStructure && 
+              ((message.bodyStructure.parts && message.bodyStructure.parts.some(part => part.disposition === 'attachment')) ||
+               (message.bodyStructure.disposition === 'attachment'))) {
+            emailsWithAttachments++;
+          }
+          
+          // Compter les emails récents
+          if (message.envelope.date) {
+            const emailDate = new Date(message.envelope.date);
+            if (emailDate >= today) {
+              todayEmails++;
             }
-            
-            // Compter les emails récents
-            if (message.envelope.date) {
-              const emailDate = new Date(message.envelope.date);
-              if (emailDate >= today) {
-                todayEmails++;
-              }
-              if (emailDate >= weekAgo) {
-                weekEmails++;
-              }
+            if (emailDate >= weekAgo) {
+              weekEmails++;
             }
-          });
+          }
         }
       } catch (fetchError) {
         console.log('🔍 DEBUG: Erreur fetch stats, utilise valeurs par défaut:', fetchError.message);

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/admin.controller');
 const withdrawalController = require('../controllers/withdrawal.controller');
+const personnelController = require('../controllers/personnel.controller');
 const { authenticateAdmin, requireSuperAdmin } = require('../middleware/auth');
 
 // Public routes (admin authentication)
@@ -20,5 +21,8 @@ router.get('/finance/stats', authenticateAdmin, adminController.getFinanceStats)
 router.get('/payments', authenticateAdmin, withdrawalController.getAllPayments);
 router.get('/withdrawals', authenticateAdmin, withdrawalController.getWithdrawals);
 router.put('/withdrawals/:id/status', authenticateAdmin, withdrawalController.updateWithdrawalStatus);
+
+// Personnel routes
+router.get('/personnel', authenticateAdmin, personnelController.getAllPersonnel);
 
 module.exports = router;

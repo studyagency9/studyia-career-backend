@@ -84,10 +84,10 @@ router.get('/:uid', authenticateAdmin, async (req, res) => {
 });
 
 // Route pour marquer un email comme lu/non lu (admin seulement)
-router.patch('/emails/:uid/read', authenticateAdmin, async (req, res) => {
+router.patch('/:uid/read', authenticateAdmin, async (req, res) => {
   try {
     const { uid } = req.params;
-    const { read = true } = req.body;
+    const { isRead = true } = req.body;
     
     if (!uid) {
       return res.status(400).json({
@@ -96,11 +96,11 @@ router.patch('/emails/:uid/read', authenticateAdmin, async (req, res) => {
       });
     }
 
-    await markEmail(parseInt(uid), read);
+    await markEmail(parseInt(uid), isRead);
 
     res.status(200).json({
       success: true,
-      message: `Email marqué comme ${read ? 'lu' : 'non lu'} avec succès`
+      message: `Email marqué comme ${isRead ? 'lu' : 'non lu'} avec succès`
     });
 
   } catch (error) {
@@ -113,8 +113,57 @@ router.patch('/emails/:uid/read', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Route pour télécharger une pièce jointe (admin seulement)
+router.get('/:uid/attachments/:filename', authenticateAdmin, async (req, res) => {
+  try {
+    const { uid, filename } = req.params;
+    
+    if (!uid || !filename) {
+      return res.status(400).json({
+        success: false,
+        error: 'UID et nom de fichier requis'
+      });
+    }
+
+    // Récupérer l'email avec pièces jointes
+    const email = await getEmail(parseInt(uid));
+    
+    if (!email || !email.attachments || email.attachments.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Aucune pièce jointe trouvée pour cet email'
+      });
+    }
+
+    // Chercher la pièce jointe demandée
+    const attachment = email.attachments.find(att => 
+      att.filename === decodeURIComponent(filename)
+    );
+
+    if (!attachment) {
+      return res.status(404).json({
+        success: false,
+        error: 'Pièce jointe non trouvée'
+      });
+    }
+
+    // Retourner la pièce jointe
+    res.setHeader('Content-Type', attachment.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${attachment.filename}"`);
+    res.send(attachment.content);
+
+  } catch (error) {
+    console.error('❌ Erreur lors du téléchargement de la pièce jointe:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors du téléchargement de la pièce jointe',
+      details: process.env.NODE_ENV === 'development' ? error.message : null
+    });
+  }
+});
+
 // Route pour supprimer un email (admin seulement)
-router.delete('/emails/:uid', authenticateAdmin, async (req, res) => {
+router.delete('/:uid', authenticateAdmin, async (req, res) => {
   try {
     const { uid } = req.params;
     

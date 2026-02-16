@@ -386,7 +386,7 @@ exports.getAllPartners = async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(parseInt(offset))
       .limit(parseInt(limit))
-      .select('id email firstName lastName company plan cvQuota cvUsedThisMonth planRenewalDate createdAt');
+      .select('id email firstName lastName company phone country city plan cvQuota cvUsedThisMonth planRenewalDate createdAt');
     
     // Calculer les stats pour chaque partner
     const quotas = { starter: 10, pro: 50, business: 200 };

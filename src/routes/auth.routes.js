@@ -10,5 +10,7 @@ router.post('/refresh', authController.refresh);
 
 // Protected routes
 router.post('/logout', authenticatePartner, authController.logout);
+router.get('/profile', authenticatePartner, authController.getProfile);
+router.get('/cv-stats', authenticatePartner, authController.getCVStats);
 
 module.exports = router;

@@ -113,6 +113,36 @@ router.patch('/:uid/read', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Route PUT pour compatibilité avec le frontend
+router.put('/:uid/read', authenticateAdmin, async (req, res) => {
+  try {
+    const { uid } = req.params;
+    const { isRead = true } = req.body;
+    
+    if (!uid) {
+      return res.status(400).json({
+        success: false,
+        error: 'UID de l\'email requis'
+      });
+    }
+
+    await markEmail(parseInt(uid), isRead);
+
+    res.status(200).json({
+      success: true,
+      message: `Email marqué comme ${isRead ? 'lu' : 'non lu'} avec succès`
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur lors du marquage de l\'email:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors du marquage de l\'email',
+      details: process.env.NODE_ENV === 'development' ? error.message : null
+    });
+  }
+});
+
 // Route pour télécharger une pièce jointe (admin seulement)
 router.get('/:uid/attachments/:filename', authenticateAdmin, async (req, res) => {
   try {
@@ -125,10 +155,13 @@ router.get('/:uid/attachments/:filename', authenticateAdmin, async (req, res) =>
       });
     }
 
+    console.log('🔍 DEBUG: Téléchargement pièce jointe - UID:', uid, 'Filename:', filename);
+
     // Récupérer l'email avec pièces jointes
     const email = await getEmail(parseInt(uid));
     
     if (!email || !email.attachments || email.attachments.length === 0) {
+      console.log('❌ Aucune pièce jointe trouvée pour cet email');
       return res.status(404).json({
         success: false,
         error: 'Aucune pièce jointe trouvée pour cet email'
@@ -141,15 +174,23 @@ router.get('/:uid/attachments/:filename', authenticateAdmin, async (req, res) =>
     );
 
     if (!attachment) {
+      console.log('❌ Pièce jointe non trouvée:', filename);
+      console.log('📋 Pièces jointes disponibles:', email.attachments.map(a => a.filename));
       return res.status(404).json({
         success: false,
         error: 'Pièce jointe non trouvée'
       });
     }
 
-    // Retourner la pièce jointe
-    res.setHeader('Content-Type', attachment.contentType);
+    console.log('✅ Pièce jointe trouvée - Type:', attachment.contentType, 'Taille:', attachment.size);
+
+    // Headers pour le téléchargement
+    res.setHeader('Content-Type', attachment.contentType || 'application/octet-stream');
+    res.setHeader('Content-Length', attachment.size);
     res.setHeader('Content-Disposition', `attachment; filename="${attachment.filename}"`);
+    res.setHeader('Cache-Control', 'no-cache');
+    
+    // Envoyer le contenu binaire
     res.send(attachment.content);
 
   } catch (error) {

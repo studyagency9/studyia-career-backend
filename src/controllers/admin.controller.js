@@ -738,8 +738,7 @@ exports.createPartner = async (req, res) => {
     const quotas = { starter: 10, pro: 50, business: 200 };
     const cvQuota = quotas[plan] || 50;
     
-    // Récupérer le prix du plan depuis la collection Plan
-    const planDetails = await Plan.findOne({ type: plan });
+    // Récupérer le prix du plan depuis la collection Plan (déjà récupéré plus haut)
     const planPrice = planDetails ? planDetails.price : 0;
     
     const partner = await Partner.create({

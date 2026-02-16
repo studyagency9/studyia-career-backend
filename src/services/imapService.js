@@ -250,8 +250,8 @@ const listEmails = async (options = {}) => {
             to: message.envelope.to || [],
             cc: message.envelope.cc || [],
             flags: message.flags,
-            unread: !message.flags.includes('\\Seen'),
-            important: message.flags.includes('\\Flagged'),
+            unread: !Array.isArray(message.flags) ? false : !message.flags.includes('\\Seen'),
+            important: !Array.isArray(message.flags) ? false : message.flags.includes('\\Flagged'),
             body: '', // Ne pas récupérer le corps pour éviter timeout
             hasAttachments: message.bodyStructure?.parts?.some(part => part.disposition === 'attachment') || false,
             size: message.bodyStructure?.size || 0

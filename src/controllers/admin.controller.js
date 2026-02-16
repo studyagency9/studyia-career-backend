@@ -684,14 +684,15 @@ exports.getFinanceStats = async (req, res) => {
 exports.createPartner = async (req, res) => {
   try {
     const {
-      name,
+      firstName,
+      lastName,
       company,
       email,
       phone,
       country,
       city,
       password,
-      plan = 'basic'
+      plan = 'starter'
     } = req.body;
 
     console.log('🔍 DEBUG: Création partenaire - Email:', email);
@@ -714,32 +715,27 @@ exports.createPartner = async (req, res) => {
       });
     }
 
-    // 3. Hasher le mot de passe
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // 4. Créer le partenaire
+    // 3. Créer le partenaire
     const partner = await Partner.create({
-      name,
+      firstName,
+      lastName,
       company,
       email,
       phone,
       country,
       city,
-      password: hashedPassword,
+      passwordHash: password, // Sera hashé automatiquement par le middleware
       plan,
-      subscriptionStatus: 'active',
+      planRenewalDate: new Date(new Date().setMonth(new Date().getMonth() + 1)), // Prochain mois
       cvUsedThisMonth: 0,
-      monthlyQuota: planDetails.monthlyQuota,
-      nextQuotaReset: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1),
-      createdAt: new Date(),
-      updatedAt: new Date()
+      status: 'active'
     });
 
     console.log('🔍 DEBUG: Partenaire créé avec ID:', partner._id);
 
-    // 5. Retourner le succès sans le mot de passe
+    // 4. Retourner le succès sans le mot de passe
     const partnerResponse = partner.toObject();
-    delete partnerResponse.password;
+    delete partnerResponse.passwordHash;
 
     return res.status(201).json({
       success: true,

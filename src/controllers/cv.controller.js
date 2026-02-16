@@ -82,6 +82,197 @@ exports.getCVById = async (req, res) => {
   }
 };
 
+// Get partner quota information
+exports.getPartnerQuota = async (req, res) => {
+  try {
+    const partnerId = req.partner.id;
+    
+    console.log('🔍 DEBUG: Vérification quota - Partner ID:', partnerId);
+    
+    // 1. Obtenir le partenaire
+    const partner = await Partner.findById(partnerId);
+    if (!partner) {
+      return res.status(404).json({
+        success: false,
+        error: 'Partner not found'
+      });
+    }
+    
+    // 2. Obtenir les détails du plan
+    const plan = await Plan.findOne({ type: partner.plan });
+    if (!plan) {
+      return res.status(404).json({
+        success: false,
+        error: 'Plan not found for this partner'
+      });
+    }
+    
+    // 3. Calculer les informations de quota
+    const quotaInfo = {
+      plan: partner.plan,
+      subscriptionStatus: partner.subscriptionStatus,
+      monthlyQuota: plan.monthlyQuota,
+      used: partner.cvUsedThisMonth || 0,
+      remaining: Math.max(0, plan.monthlyQuota - (partner.cvUsedThisMonth || 0)),
+      percentageUsed: Math.round(((partner.cvUsedThisMonth || 0) / plan.monthlyQuota) * 100),
+      nextResetDate: partner.nextQuotaReset || new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1)
+    };
+    
+    console.log('🔍 DEBUG: Quota info:', quotaInfo);
+    
+    return res.status(200).json({
+      success: true,
+      data: quotaInfo
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur vérification quota:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error while checking quota',
+      details: process.env.NODE_ENV === 'development' ? error.message : null
+    });
+  }
+};
+
+// Create a new CV for Partner with quota management
+exports.createPartnerCV = async (req, res) => {
+  try {
+    const { name, language, data } = req.body;
+    const partnerId = req.partner.id;
+    
+    console.log('🔍 DEBUG: Création CV Partenaire - Partner ID:', partnerId);
+    
+    // 1. Vérifier le partenaire et son abonnement
+    const partner = await Partner.findById(partnerId);
+    if (!partner) {
+      return res.status(404).json({
+        success: false,
+        error: 'Partner not found'
+      });
+    }
+    
+    console.log('🔍 DEBUG: Partner trouvé, plan:', partner.plan);
+    
+    // 2. Vérifier si le partenaire a un abonnement actif
+    if (!partner.subscriptionStatus || partner.subscriptionStatus !== 'active') {
+      return res.status(403).json({
+        success: false,
+        error: 'Partner subscription is not active',
+        details: 'Please renew your subscription to create CVs'
+      });
+    }
+    
+    // 3. Obtenir les détails du plan
+    const plan = await Plan.findOne({ type: partner.plan });
+    if (!plan) {
+      return res.status(404).json({
+        success: false,
+        error: 'Plan not found for this partner'
+      });
+    }
+    
+    console.log('🔍 DEBUG: Plan trouvé, quota mensuel:', plan.monthlyQuota);
+    console.log('🔍 DEBUG: CV utilisés ce mois:', partner.cvUsedThisMonth);
+    
+    // 4. Vérifier le quota disponible
+    if (partner.cvUsedThisMonth >= plan.monthlyQuota) {
+      return res.status(403).json({
+        success: false,
+        error: 'Monthly CV quota exceeded',
+        details: `You have used ${partner.cvUsedThisMonth} of ${plan.monthlyQuota} CVs this month`,
+        quotaInfo: {
+          used: partner.cvUsedThisMonth,
+          limit: plan.monthlyQuota,
+          remaining: 0
+        }
+      });
+    }
+    
+    // 5. Créer le CV
+    const cv = await CV.create({
+      partnerId,
+      name,
+      language,
+      data,
+      pdfUrl: req.body.pdfUrl || null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    
+    console.log('🔍 DEBUG: CV créé avec ID:', cv._id);
+    
+    // 6. Déduire du quota et mettre à jour le partenaire
+    await Partner.findByIdAndUpdate(
+      partnerId,
+      { 
+        $inc: { cvUsedThisMonth: 1 },
+        $push: {
+          cvHistory: {
+            cvId: cv._id,
+            name: cv.name,
+            pdfUrl: cv.pdfUrl,
+            createdAt: new Date()
+          }
+        }
+      }
+    );
+    
+    console.log('🔍 DEBUG: Quota déduit, nouveau total:', partner.cvUsedThisMonth + 1);
+    
+    // 7. Créer automatiquement le personnel
+    try {
+      if (data && data.personalInfo) {
+        const personalInfo = data.personalInfo;
+        
+        const personnel = await Personnel.create({
+          firstName: personalInfo.firstName || '',
+          lastName: personalInfo.lastName || '',
+          dateOfBirth: personalInfo.dateOfBirth ? new Date(personalInfo.dateOfBirth) : new Date(),
+          gender: personalInfo.gender || 'M',
+          phoneNumber: personalInfo.phoneNumber || personalInfo.phone || '',
+          position: personalInfo.position || personalInfo.jobTitle || '',
+          cvId: cv._id,
+          cvPdfUrl: cv.pdfUrl,
+          partnerId: partnerId, // Lien avec le partenaire
+          additionalInfo: {
+            email: personalInfo.email || '',
+            address: personalInfo.address || ''
+          }
+        });
+        
+        console.log('🔍 DEBUG: Personnel créé avec ID:', personnel._id);
+      }
+    } catch (personnelError) {
+      console.error('❌ Erreur création personnel:', personnelError);
+      // Ne pas bloquer la création du CV
+    }
+    
+    // 8. Retourner le succès avec les informations de quota
+    return res.status(201).json({
+      success: true,
+      message: 'CV created successfully and personnel record generated',
+      data: {
+        cv: cv,
+        quotaInfo: {
+          used: partner.cvUsedThisMonth + 1,
+          limit: plan.monthlyQuota,
+          remaining: plan.monthlyQuota - (partner.cvUsedThisMonth + 1)
+        },
+        subscriptionStatus: partner.subscriptionStatus
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur création CV partenaire:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error while creating partner CV',
+      details: process.env.NODE_ENV === 'development' ? error.message : null
+    });
+  }
+};
+
 // Create a new CV
 exports.createCV = async (req, res) => {
   try {

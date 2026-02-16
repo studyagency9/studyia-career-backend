@@ -6,6 +6,10 @@ const { authenticatePartner, authenticateAdmin } = require('../middleware/auth')
 // Public routes
 router.post('/purchase', cvController.purchaseCV);
 
+// Partner specific routes
+router.post('/partner/create', authenticatePartner, cvController.createPartnerCV);
+router.get('/partner/quota', authenticatePartner, cvController.getPartnerQuota);
+
 // Protected routes - Partners
 router.get('/', authenticatePartner, cvController.getAllCVs);
 router.get('/:id', authenticatePartner, cvController.getCVById);

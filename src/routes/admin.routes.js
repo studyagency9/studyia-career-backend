@@ -12,6 +12,7 @@ router.get('/stats/financial', authenticateAdmin, adminController.getFinancialSt
 router.get('/stats/dashboard', authenticateAdmin, adminController.getDashboardStats);
 router.get('/cvs', authenticateAdmin, adminController.getAllCVs);
 router.get('/partners', authenticateAdmin, adminController.getAllPartners);
+router.post('/partners', authenticateAdmin, adminController.createPartner);
 router.put('/partners/:id/status', authenticateAdmin, adminController.updatePartnerStatus);
 router.get('/associates', authenticateAdmin, adminController.getAllAssociates);
 router.put('/associates/:id/status', authenticateAdmin, adminController.updateAssociateStatus);

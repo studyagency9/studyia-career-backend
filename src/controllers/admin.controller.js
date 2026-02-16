@@ -1,6 +1,7 @@
-const { Admin, Partner, CV, Associate, Payment } = require('../models');
+const { Admin, Partner, CV, Associate, Payment, Plan } = require('../models');
 const { generateAccessToken } = require('../utils/jwt');
 const mongoose = require('mongoose');
+const bcrypt = require('bcrypt');
 
 // Statistiques financières simples
 exports.getFinancialStats = async (req, res) => {
@@ -675,6 +676,83 @@ exports.getFinanceStats = async (req, res) => {
     return res.status(500).json({
       success: false,
       error: 'Server error while fetching financial statistics'
+    });
+  }
+};
+
+// Create a new partner
+exports.createPartner = async (req, res) => {
+  try {
+    const {
+      name,
+      company,
+      email,
+      phone,
+      country,
+      city,
+      password,
+      plan = 'basic'
+    } = req.body;
+
+    console.log('🔍 DEBUG: Création partenaire - Email:', email);
+
+    // 1. Vérifier si le partenaire existe déjà
+    const existingPartner = await Partner.findOne({ email });
+    if (existingPartner) {
+      return res.status(409).json({
+        success: false,
+        error: 'Partner with this email already exists'
+      });
+    }
+
+    // 2. Vérifier si le plan existe
+    const planDetails = await Plan.findOne({ type: plan });
+    if (!planDetails) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid plan specified'
+      });
+    }
+
+    // 3. Hasher le mot de passe
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // 4. Créer le partenaire
+    const partner = await Partner.create({
+      name,
+      company,
+      email,
+      phone,
+      country,
+      city,
+      password: hashedPassword,
+      plan,
+      subscriptionStatus: 'active',
+      cvUsedThisMonth: 0,
+      monthlyQuota: planDetails.monthlyQuota,
+      nextQuotaReset: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1),
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    console.log('🔍 DEBUG: Partenaire créé avec ID:', partner._id);
+
+    // 5. Retourner le succès sans le mot de passe
+    const partnerResponse = partner.toObject();
+    delete partnerResponse.password;
+
+    return res.status(201).json({
+      success: true,
+      message: 'Partner created successfully',
+      data: partnerResponse
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur création partenaire:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error while creating partner',
+      details: process.env.NODE_ENV === 'development' ? error.message : null
     });
   }
 };

@@ -386,7 +386,26 @@ exports.getAllPartners = async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(parseInt(offset))
       .limit(parseInt(limit))
-      .select('id email firstName lastName company plan cvUsedThisMonth planRenewalDate createdAt');
+      .select('id email firstName lastName company plan cvQuota cvUsedThisMonth planRenewalDate createdAt');
+    
+    // Calculer les stats pour chaque partner
+    const quotas = { starter: 10, pro: 50, business: 200 };
+    const partnersWithStats = partners.map(partner => {
+      const partnerObj = partner.toObject();
+      const cvQuota = partnerObj.cvQuota || quotas[partnerObj.plan] || 50;
+      const cvUsed = partnerObj.cvUsedThisMonth || 0;
+      
+      partnerObj.cvStats = {
+        quota: cvQuota,
+        used: cvUsed,
+        remaining: Math.max(0, cvQuota - cvUsed),
+        percentageUsed: Math.round((cvUsed / cvQuota) * 100),
+        isLimitReached: cvUsed >= cvQuota,
+        plan: partnerObj.plan
+      };
+      
+      return partnerObj;
+    });
     
     // Calculate pagination info
     const totalPages = Math.ceil(count / limit);
@@ -394,7 +413,7 @@ exports.getAllPartners = async (req, res) => {
     return res.status(200).json({
       success: true,
       data: {
-        partners,
+        partners: partnersWithStats,
         pagination: {
           total: count,
           page: parseInt(page),
@@ -716,6 +735,9 @@ exports.createPartner = async (req, res) => {
     }
 
     // 3. Créer le partenaire
+    const quotas = { starter: 10, pro: 50, business: 200 };
+    const cvQuota = quotas[plan] || 50;
+    
     const partner = await Partner.create({
       firstName,
       lastName,
@@ -726,6 +748,7 @@ exports.createPartner = async (req, res) => {
       city,
       passwordHash: password, // Sera hashé automatiquement par le middleware
       plan,
+      cvQuota, // Ajouter le quota explicitement
       planRenewalDate: new Date(new Date().setMonth(new Date().getMonth() + 1)), // Prochain mois
       cvUsedThisMonth: 0,
       status: 'active'
@@ -733,9 +756,23 @@ exports.createPartner = async (req, res) => {
 
     console.log('🔍 DEBUG: Partenaire créé avec ID:', partner._id);
 
-    // 4. Retourner le succès sans le mot de passe
+    // 4. Calculer les stats CV
+    const cvStats = {
+      quota: cvQuota,
+      used: 0,
+      remaining: cvQuota,
+      percentageUsed: 0,
+      isLimitReached: false,
+      plan: plan
+    };
+
+    // 5. Retourner le succès sans le mot de passe
     const partnerResponse = partner.toObject();
     delete partnerResponse.passwordHash;
+    
+    // Ajouter les stats à la réponse
+    partnerResponse.cvQuota = cvQuota;
+    partnerResponse.cvStats = cvStats;
 
     return res.status(201).json({
       success: true,

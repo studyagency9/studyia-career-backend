@@ -46,6 +46,19 @@ exports.signup = async (req, res) => {
     });
 
     // Return success response with partner data and tokens
+    // Calculer les stats CV manuellement pour l'instant
+    const quotas = { starter: 10, pro: 50, business: 200 };
+    const cvQuota = quotas[partner.plan] || 50;
+    const cvUsed = partner.cvUsedThisMonth || 0;
+    const cvStats = {
+      quota: cvQuota,
+      used: cvUsed,
+      remaining: Math.max(0, cvQuota - cvUsed),
+      percentageUsed: Math.round((cvUsed / cvQuota) * 100),
+      isLimitReached: cvUsed >= cvQuota,
+      plan: partner.plan
+    };
+    
     return res.status(201).json({
       success: true,
       data: {
@@ -56,8 +69,11 @@ exports.signup = async (req, res) => {
           lastName: partner.lastName,
           company: partner.company,
           plan: partner.plan,
-          cvUsedThisMonth: partner.cvUsedThisMonth,
-          planRenewalDate: partner.planRenewalDate
+          cvQuota: cvQuota,
+          cvUsedThisMonth: cvUsed,
+          cvStats: cvStats,
+          planRenewalDate: partner.planRenewalDate,
+          status: partner.status
         },
         accessToken,
         refreshToken
@@ -110,6 +126,19 @@ exports.login = async (req, res) => {
     });
 
     // Return success response with partner data and tokens
+    // Calculer les stats CV manuellement pour l'instant
+    const quotas = { starter: 10, pro: 50, business: 200 };
+    const cvQuota = quotas[partner.plan] || 50;
+    const cvUsed = partner.cvUsedThisMonth || 0;
+    const cvStats = {
+      quota: cvQuota,
+      used: cvUsed,
+      remaining: Math.max(0, cvQuota - cvUsed),
+      percentageUsed: Math.round((cvUsed / cvQuota) * 100),
+      isLimitReached: cvUsed >= cvQuota,
+      plan: partner.plan
+    };
+    
     return res.status(200).json({
       success: true,
       data: {
@@ -120,8 +149,11 @@ exports.login = async (req, res) => {
           lastName: partner.lastName,
           company: partner.company,
           plan: partner.plan,
-          cvUsedThisMonth: partner.cvUsedThisMonth,
-          planRenewalDate: partner.planRenewalDate
+          cvQuota: cvQuota,
+          cvUsedThisMonth: cvUsed,
+          cvStats: cvStats,
+          planRenewalDate: partner.planRenewalDate,
+          status: partner.status
         },
         accessToken,
         refreshToken
@@ -202,6 +234,59 @@ exports.logout = async (req, res) => {
     return res.status(500).json({
       success: false,
       error: 'Server error during logout'
+    });
+  }
+};
+
+// Get partner profile
+exports.getProfile = async (req, res) => {
+  try {
+    const partner = req.partner;
+    const cvStats = partner.getCVStats();
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        partner: {
+          id: partner.id,
+          email: partner.email,
+          firstName: partner.firstName,
+          lastName: partner.lastName,
+          company: partner.company,
+          plan: partner.plan,
+          cvQuota: partner.cvQuota,
+          cvUsedThisMonth: partner.cvUsedThisMonth,
+          cvStats: cvStats,
+          planRenewalDate: partner.planRenewalDate,
+          status: partner.status,
+          createdAt: partner.createdAt
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get profile error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error while fetching profile'
+    });
+  }
+};
+
+// Get CV statistics
+exports.getCVStats = async (req, res) => {
+  try {
+    const partner = req.partner;
+    const cvStats = partner.getCVStats();
+
+    return res.status(200).json({
+      success: true,
+      data: cvStats
+    });
+  } catch (error) {
+    console.error('Get CV stats error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server error while fetching CV stats'
     });
   }
 };

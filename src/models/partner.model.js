@@ -25,6 +25,18 @@ const partnerSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  phone: {
+    type: String,
+    required: false
+  },
+  country: {
+    type: String,
+    required: false
+  },
+  city: {
+    type: String,
+    required: false
+  },
   plan: {
     type: String,
     enum: ['starter', 'pro', 'business'],

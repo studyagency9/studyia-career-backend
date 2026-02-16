@@ -169,10 +169,10 @@ const listEmails = async (options = {}) => {
         
         // Étape 2: SEARCH avec syntaxe imapflow correcte
         if (mailbox.exists && mailbox.exists > 0) {
-          let searchCriteria = { uid: true }; // Par défaut: tous les messages
+          let searchCriteria = {}; // Par défaut: tous les messages
           
           if (unreadOnly) {
-            searchCriteria = { seen: false, uid: true };
+            searchCriteria = { seen: false };
           }
           
           if (search) {
@@ -181,13 +181,11 @@ const listEmails = async (options = {}) => {
                 { subject: search },
                 { from: search },
                 { body: search }
-              ],
-              uid: true
+              ]
             };
             if (unreadOnly) {
               searchCriteria = { 
-                and: [{ seen: false }, searchCriteria],
-                uid: true
+                and: [{ seen: false }, searchCriteria]
               };
             }
           }
@@ -446,7 +444,8 @@ const getEmailStats = async () => {
         const fetchResult = await client.fetch(`${startUid}:${endUid}`, { 
           envelope: true, 
           flags: true,
-          bodyStructure: true
+          bodyStructure: true,
+          uid: true
         });
         
         if (fetchResult && typeof fetchResult === 'object') {

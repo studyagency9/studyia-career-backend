@@ -1,6 +1,7 @@
 const { ImapFlow } = require('imapflow');
+const { simpleParser } = require('mailparser');
 
-// Configuration IMAP
+// Configuration IMAP professionnelle pour Hostinger
 const imapConfig = {
   host: 'imap.hostinger.com',
   port: 993,
@@ -9,10 +10,14 @@ const imapConfig = {
     user: 'contact@studyia.net',
     pass: process.env.MAIL_PASSWORD,
   },
-  // Ajouter des timeouts pour éviter les crashes
-  socketTimeout: 300000, // 5 minutes
-  connectTimeout: 30000, // 30 secondes
-  idleTimeout: 300000, // 5 minutes
+  // Recommandé pour production
+  logger: false,
+  disableAutoEnable: true,
+  requireTLS: true,
+  // Timeouts (évite les connexions "pendues")
+  socketTimeout: 60 * 1000,
+  greetingTimeout: 30 * 1000,
+  connectionTimeout: 30 * 1000,
 };
 
 let client = null;
@@ -154,167 +159,104 @@ const listEmails = async (options = {}) => {
       
       await connectImap();
       
-      // Sélectionner la boîte de réception
-      const mailbox = await client.mailboxOpen(folder);
-      console.log(`📧 Boîte sélectionnée: ${mailbox.name} (${mailbox.exists} messages)`);
-
-      // Récupérer les messages - CORRECTION FINALE
-      let messages;
-      try {
-        console.log('🔍 DEBUG: Récupération UIDs avec imapflow');
-        
-        // Étape 1: Ouvrir la boîte mail
-        const mailbox = await client.mailboxOpen(folder);
-        console.log('🔍 DEBUG: Boîte mail ouverte, exists:', mailbox.exists, 'uidNext:', mailbox.uidNext, 'uidValidity:', mailbox.uidValidity);
-        
-        // Étape 2: SEARCH avec syntaxe imapflow correcte
-        if (mailbox.exists && mailbox.exists > 0) {
-          let searchCriteria = {}; // Par défaut: tous les messages
-          
-          if (unreadOnly) {
-            searchCriteria = { seen: false };
-          }
-          
-          if (search) {
-            searchCriteria = { 
-              or: [
-                { subject: search },
-                { from: search },
-                { body: search }
-              ]
-            };
-            if (unreadOnly) {
-              searchCriteria = { 
-                and: [{ seen: false }, searchCriteria]
-              };
-            }
-          }
-          
-          console.log('🔍 DEBUG: Search criteria:', searchCriteria);
-          const searchResult = await client.search(searchCriteria);
-          messages = Array.isArray(searchResult) ? searchResult : [];
-          console.log('🔍 DEBUG: Vrais UIDs trouvés:', messages.length, messages.slice(0, 5));
-        } else {
-          messages = [];
-          console.log('🔍 DEBUG: Aucun message dans la boîte');
-        }
-      } catch (searchError) {
-        console.error('❌ Erreur SEARCH IMAP:', searchError.message);
-        console.log('🔍 DEBUG: Fallback - utilisation search({ all: true })');
-        
-        // CORRECTION : Fallback simple et fiable
-        try {
-          const fallbackResult = await client.search({ all: true });
-          messages = Array.isArray(fallbackResult) ? fallbackResult : [];
-          console.log('🔍 DEBUG: Fallback UIDs trouvés:', messages.length, messages.slice(0, 5));
-        } catch (fallbackError) {
-          console.error('❌ Erreur fallback:', fallbackError.message);
-          messages = [];
+      // Ouvrir la boîte mail
+      await client.mailboxOpen('INBOX');
+      
+      // Rechercher les UIDs selon les critères
+      let searchCriteria = { all: true };
+      if (unreadOnly) {
+        searchCriteria = { seen: false };
+      }
+      if (search) {
+        searchCriteria = { 
+          or: [
+            { subject: search },
+            { from: search },
+            { body: search }
+          ]
+        };
+        if (unreadOnly) {
+          searchCriteria = { 
+            and: [{ seen: false }, searchCriteria]
+          };
         }
       }
-
-      // S'assurer que messages est un tableau
-      if (!Array.isArray(messages)) {
-        console.error('❌ messages n\'est pas un tableau:', typeof messages, messages);
-        messages = [];
-      }
-
-      console.log('🔍 DEBUG: Messages trouvés:', messages.length);
-
-      // CORRECTION : Trier les UIDs du plus récent au plus ancien
-      messages = messages.sort((a, b) => b - a);
-      console.log('🔍 DEBUG: UIDs triés (plus récents d\'abord):', messages.slice(0, 5));
-
-      // CORRECTION : Pagination simple sur UIDs triés
-      const pageUids = messages.slice(offset, offset + limit);
-      console.log('🔍 DEBUG: UIDs pour cette page:', pageUids.length, pageUids);
-
-      // Récupérer les détails des messages
+      
+      const uids = await client.search(searchCriteria);
+      console.log('🔍 DEBUG: UIDs trouvés:', uids.length);
+      
+      // Pagination sur les UIDs
+      const totalUids = uids.sort((a, b) => b - a); // Plus récents d'abord
+      const pageUids = totalUids.slice(offset, offset + limit);
+      console.log('🔍 DEBUG: UIDs pour cette page:', pageUids.length);
+      
+      // Récupérer les messages avec source brute pour mailparser
       const emails = [];
-      for (const uid of pageUids) {
+      for await (const msg of client.fetch(pageUids, { 
+        uid: true, 
+        envelope: true, 
+        flags: true, 
+        internalDate: true, 
+        source: true 
+      })) {
         try {
-          // CORRECTION : Forcer le mode UID dans fetchOne et récupérer le corps
-          const message = await client.fetchOne(uid, { 
-            uid: true,
-            envelope: true, 
-            flags: true, 
-            bodyStructure: true,
-            body: '1.MIME', // Récupérer le corps en MIME
-            source: true // Récupérer la source complète
-          });
+          // Parser le message avec mailparser
+          const parsed = await simpleParser(msg.source);
           
-          // Gérer les flags correctement avec imapflow
-          const flags = message.flags || [];
-          console.log(`🔍 DEBUG: Message ${uid} flags:`, typeof flags, flags);
-          
-          const flagsArray = Array.isArray(flags) ? flags : Object.keys(flags).filter(key => flags[key]);
-          console.log(`🔍 DEBUG: Message ${uid} flagsArray:`, flagsArray);
-          
-          // Détecter les pièces jointes correctement avec imapflow
-          const hasAttachments = message.bodyStructure && (
-            (message.bodyStructure.parts && message.bodyStructure.parts.some(part => part.disposition === 'attachment')) ||
-            (message.bodyStructure.disposition === 'attachment')
-          );
-          
-          // Obtenir la taille correcte
-          const size = message.bodyStructure?.size || 
-                      (message.bodyStructure?.parts && message.bodyStructure.parts.reduce((total, part) => total + (part.size || 0), 0)) || 
-                      0;
-          
-          // Extraire le corps du message
-          let body = '';
-          if (message.source) {
-            // Extraire le corps texte de la source MIME
-            const lines = message.source.split('\n');
-            let inBody = false;
-            let bodyLines = [];
-            
-            for (const line of lines) {
-              if (inBody) {
-                bodyLines.push(line);
-              } else if (line.trim() === '' && bodyLines.length > 0) {
-                inBody = true;
-              } else if (line.startsWith('Content-Type: text/plain')) {
-                bodyLines = []; // Commencer à collecter après cette ligne
-              }
-            }
-            
-            body = bodyLines.join('\n').trim();
-            if (body.length > 1000) {
-              body = body.substring(0, 1000) + '...'; // Limiter la taille
-            }
-          } else if (message.body) {
-            body = typeof message.body === 'string' ? message.body : '';
-          }
+          // Gérer les flags correctement
+          const flagsArray = Array.isArray(msg.flags) ? msg.flags : [];
           
           const email = {
-            uid: uid,
-            messageId: message.envelope.messageId,
-            date: message.envelope.date,
-            subject: message.envelope.subject || '(Pas de sujet)',
-            from: message.envelope.from?.[0] || null,
-            to: message.envelope.to || [],
-            cc: message.envelope.cc || [],
+            uid: msg.uid,
+            messageId: parsed.messageId,
+            date: msg.internalDate || parsed.date,
+            subject: parsed.subject || '(Pas de sujet)',
+            from: parsed.from?.value?.[0] || null,
+            to: parsed.to?.value || [],
+            cc: parsed.cc?.value || [],
             flags: flagsArray,
             unread: !flagsArray.includes('\\Seen'),
             important: flagsArray.includes('\\Flagged'),
-            body,
-            hasAttachments,
-            size
+            body: parsed.text || parsed.html || '', // Contenu parsé proprement
+            hasAttachments: parsed.attachments && parsed.attachments.length > 0,
+            size: msg.source ? msg.source.length : 0,
+            attachments: parsed.attachments?.map(att => ({
+              filename: att.filename,
+              contentType: att.contentType,
+              size: att.size
+            })) || []
           };
-
+          
           emails.push(email);
-        } catch (messageError) {
-          console.error(`❌ Erreur récupération message ${uid}:`, messageError.message);
-          // Continuer avec les autres messages
+          console.log(`🔍 DEBUG: Email ${msg.uid} parsé - Body: ${email.body.length} chars, Attachments: ${email.attachments.length}`);
+        } catch (parseError) {
+          console.error(`❌ Erreur parsing message ${msg.uid}:`, parseError.message);
+          // Fallback basique si mailparser échoue
+          const fallbackEmail = {
+            uid: msg.uid,
+            messageId: msg.envelope?.messageId,
+            date: msg.internalDate,
+            subject: msg.envelope?.subject || '(Pas de sujet)',
+            from: msg.envelope?.from?.[0] || null,
+            to: msg.envelope?.to || [],
+            cc: msg.envelope?.cc || [],
+            flags: Array.isArray(msg.flags) ? msg.flags : [],
+            unread: !Array.isArray(msg.flags) ? false : !msg.flags.includes('\\Seen'),
+            important: Array.isArray(msg.flags) ? msg.flags.includes('\\Flagged') : false,
+            body: '(Contenu non parsable)',
+            hasAttachments: false,
+            size: msg.source ? msg.source.length : 0,
+            attachments: []
+          };
+          emails.push(fallbackEmail);
         }
       }
 
       return {
         emails,
-        total: messages.length,
-        folder: mailbox.name,
-        unreadCount: mailbox.unseen
+        total: totalUids.length,
+        folder: 'INBOX',
+        unreadCount: 0 // TODO: Récupérer le nombre de messages non lus
       };
     };
 

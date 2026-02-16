@@ -233,13 +233,59 @@ const listEmails = async (options = {}) => {
       const emails = [];
       for (const uid of pageUids) {
         try {
-          // CORRECTION : Forcer le mode UID dans fetchOne
+          // CORRECTION : Forcer le mode UID dans fetchOne et récupérer le corps
           const message = await client.fetchOne(uid, { 
             uid: true,
             envelope: true, 
             flags: true, 
-            bodyStructure: true 
+            bodyStructure: true,
+            body: '1.MIME', // Récupérer le corps en MIME
+            source: true // Récupérer la source complète
           });
+          
+          // Gérer les flags correctement avec imapflow
+          const flags = message.flags || [];
+          console.log(`🔍 DEBUG: Message ${uid} flags:`, typeof flags, flags);
+          
+          const flagsArray = Array.isArray(flags) ? flags : Object.keys(flags).filter(key => flags[key]);
+          console.log(`🔍 DEBUG: Message ${uid} flagsArray:`, flagsArray);
+          
+          // Détecter les pièces jointes correctement avec imapflow
+          const hasAttachments = message.bodyStructure && (
+            (message.bodyStructure.parts && message.bodyStructure.parts.some(part => part.disposition === 'attachment')) ||
+            (message.bodyStructure.disposition === 'attachment')
+          );
+          
+          // Obtenir la taille correcte
+          const size = message.bodyStructure?.size || 
+                      (message.bodyStructure?.parts && message.bodyStructure.parts.reduce((total, part) => total + (part.size || 0), 0)) || 
+                      0;
+          
+          // Extraire le corps du message
+          let body = '';
+          if (message.source) {
+            // Extraire le corps texte de la source MIME
+            const lines = message.source.split('\n');
+            let inBody = false;
+            let bodyLines = [];
+            
+            for (const line of lines) {
+              if (inBody) {
+                bodyLines.push(line);
+              } else if (line.trim() === '' && bodyLines.length > 0) {
+                inBody = true;
+              } else if (line.startsWith('Content-Type: text/plain')) {
+                bodyLines = []; // Commencer à collecter après cette ligne
+              }
+            }
+            
+            body = bodyLines.join('\n').trim();
+            if (body.length > 1000) {
+              body = body.substring(0, 1000) + '...'; // Limiter la taille
+            }
+          } else if (message.body) {
+            body = typeof message.body === 'string' ? message.body : '';
+          }
           
           const email = {
             uid: uid,
@@ -249,12 +295,12 @@ const listEmails = async (options = {}) => {
             from: message.envelope.from?.[0] || null,
             to: message.envelope.to || [],
             cc: message.envelope.cc || [],
-            flags: message.flags,
-            unread: !Array.isArray(message.flags) ? false : !message.flags.includes('\\Seen'),
-            important: !Array.isArray(message.flags) ? false : message.flags.includes('\\Flagged'),
-            body: '', // Ne pas récupérer le corps pour éviter timeout
-            hasAttachments: message.bodyStructure?.parts?.some(part => part.disposition === 'attachment') || false,
-            size: message.bodyStructure?.size || 0
+            flags: flagsArray,
+            unread: !flagsArray.includes('\\Seen'),
+            important: flagsArray.includes('\\Flagged'),
+            body,
+            hasAttachments,
+            size
           };
 
           emails.push(email);

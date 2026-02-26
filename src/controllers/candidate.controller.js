@@ -6,9 +6,9 @@ const path = require('path');
 const fs = require('fs').promises;
 const pdfParse = require('pdf-parse');
 const mammoth = require('mammoth');
-// Configuration Gemini AI - Utilise EXACTEMENT le même endpoint que le frontend
+// Configuration Gemini AI - Endpoint officiel optimisé pour backend
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_BASE_URL = 'https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-2.5-flash-lite:streamGenerateContent';
+const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
 // Configuration multer pour upload CV
 const storage = multer.diskStorage({
@@ -255,7 +255,7 @@ Retourne un JSON avec cette structure exacte:
 IMPORTANT: Retourne UNIQUEMENT le JSON, sans texte avant ou après.
 `;
 
-  // Appel API Gemini avec fetch (EXACTEMENT comme le frontend)
+  // Appel API Gemini (non-streaming, optimisé backend)
   const response = await fetch(`${GEMINI_BASE_URL}?key=${GEMINI_API_KEY}`, {
     method: 'POST',
     headers: {
@@ -263,7 +263,6 @@ IMPORTANT: Retourne UNIQUEMENT le JSON, sans texte avant ou après.
     },
     body: JSON.stringify({
       contents: [{
-        role: 'user',
         parts: [{
           text: prompt
         }]
@@ -278,43 +277,19 @@ IMPORTANT: Retourne UNIQUEMENT le JSON, sans texte avant ou après.
 
   const result = await response.json();
   
-  // Traiter le format streaming (array de chunks) comme le frontend
-  let combinedText = '';
-  
-  if (Array.isArray(result)) {
-    // Format streaming: concaténer tous les chunks
-    for (const chunk of result) {
-      if (chunk.candidates && chunk.candidates.length > 0) {
-        const candidate = chunk.candidates[0];
-        if (candidate.content && candidate.content.parts) {
-          for (const part of candidate.content.parts) {
-            if (part.text) {
-              combinedText += part.text;
-            }
-          }
-        }
-      }
-    }
-  } else {
-    // Format non-streaming: extraction directe
-    if (!result.candidates || result.candidates.length === 0) {
-      throw new Error('No candidates in Gemini response');
-    }
-    
-    const firstCandidate = result.candidates[0];
-    if (!firstCandidate.content || !firstCandidate.content.parts) {
-      throw new Error('No content in Gemini candidate');
-    }
-    
-    combinedText = firstCandidate.content.parts[0].text || '';
+  // Extraction simple (format non-streaming)
+  if (!result.candidates || result.candidates.length === 0) {
+    throw new Error('No candidates in Gemini response');
   }
   
-  if (!combinedText) {
+  const text = result.candidates[0]?.content?.parts?.[0]?.text;
+  
+  if (!text) {
     throw new Error('Empty text in Gemini response');
   }
   
   // Nettoyer la réponse pour extraire le JSON
-  let jsonText = combinedText.trim();
+  let jsonText = text.trim();
   
   // Supprimer les balises markdown si présentes
   if (jsonText.startsWith('```json')) {

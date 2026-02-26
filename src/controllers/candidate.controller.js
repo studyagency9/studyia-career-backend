@@ -6,9 +6,9 @@ const path = require('path');
 const fs = require('fs').promises;
 const pdfParse = require('pdf-parse');
 const mammoth = require('mammoth');
-// Configuration Gemini AI - Endpoint v1 qui supporte les API keys
+// Configuration Gemini AI - Endpoint v1beta avec modèle disponible
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent';
+const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent';
 
 // Configuration multer pour upload CV
 const storage = multer.diskStorage({

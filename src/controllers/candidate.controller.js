@@ -6,10 +6,9 @@ const path = require('path');
 const fs = require('fs').promises;
 const pdfParse = require('pdf-parse');
 const mammoth = require('mammoth');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-
-// Configuration Gemini AI
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// Configuration Gemini AI - Utilise le même endpoint que le frontend
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
 // Configuration multer pour upload CV
 const storage = multer.diskStorage({
@@ -167,8 +166,6 @@ async function extractTextFromWord(filePath) {
 
 // Analyser un CV avec Gemini AI
 async function analyzeCVWithGemini(cvText, jobPost) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
-  
   const prompt = `
 Tu es un expert en recrutement. Analyse ce CV et extrais les informations structurées suivantes au format JSON.
 
@@ -258,9 +255,40 @@ Retourne un JSON avec cette structure exacte:
 IMPORTANT: Retourne UNIQUEMENT le JSON, sans texte avant ou après.
 `;
 
-  const result = await model.generateContent(prompt);
-  const response = await result.response;
-  const text = response.text();
+  // Appel API Gemini avec fetch (même approche que le frontend)
+  const response = await fetch(`${GEMINI_BASE_URL}?key=${GEMINI_API_KEY}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      contents: [{
+        parts: [{
+          text: prompt
+        }]
+      }],
+      generationConfig: {
+        temperature: 0.7,
+        topK: 40,
+        topP: 0.95,
+        maxOutputTokens: 8192
+      }
+    })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(`Gemini API Error: ${JSON.stringify(errorData)}`);
+  }
+
+  const data = await response.json();
+  
+  // Extraire le texte de la réponse
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  
+  if (!text) {
+    throw new Error('No response from Gemini API');
+  }
   
   // Nettoyer la réponse pour extraire le JSON
   let jsonText = text.trim();

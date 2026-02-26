@@ -70,6 +70,25 @@ const partnerSchema = new mongoose.Schema({
     type: String,
     enum: ['active', 'suspended'],
     default: 'active'
+  },
+  // Préférences de notification
+  notificationSettings: {
+    emailNotifications: {
+      type: Boolean,
+      default: true
+    },
+    newApplications: {
+      type: Boolean,
+      default: true
+    },
+    highScoreCandidates: {
+      type: Boolean,
+      default: true
+    },
+    deadlineReminders: {
+      type: Boolean,
+      default: true
+    }
   }
 }, {
   timestamps: true

@@ -24,7 +24,11 @@ const associateRoutes = require('./routes/associate.routes');
 const invoiceRoutes = require('./routes/invoice.routes');
 const contactRoutes = require('./routes/contact.routes');
 const emailRoutes = require('./routes/email.routes');
-const pdfRoutes = require('./routes/pdf.routes'); // 🆕 Routes PDF upload
+const pdfRoutes = require('./routes/pdf.routes');
+const jobPostRoutes = require('./routes/jobPost.routes'); // 🆕 Gestion des offres d'emploi
+const candidateRoutes = require('./routes/candidate.routes'); // 🆕 Gestion des candidatures
+const analyticsRoutes = require('./routes/analytics.routes'); // 🆕 Analytics et statistiques
+const notificationRoutes = require('./routes/notification.routes'); // 🆕 Notifications
 
 // Load environment variables
 dotenv.config();
@@ -107,7 +111,13 @@ app.use('/api', contactRoutes); // Routes publiques de contact
 // Routes emails
 app.use('/api/emails', emailRoutes);
 // Les routes emails sont déjà accessibles via /api/emails, pas besoin de les ajouter à /api/admin
-app.use('/api/pdfs', pdfRoutes); // 🆕 Routes upload PDF
+app.use('/api/pdfs', pdfRoutes);
+
+// 🆕 Nouvelles routes Studyia Career Pro
+app.use('/api/job-posts', jobPostRoutes);
+app.use('/api', candidateRoutes); // Inclut /job-posts/:jobId/upload-cvs et /candidates/:id
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Route spécifique pour la compatibilité avec le frontend (sans 's' à cv)
 app.post('/api/cv/purchase', (req, res) => {

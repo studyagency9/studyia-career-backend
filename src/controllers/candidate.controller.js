@@ -6,9 +6,9 @@ const path = require('path');
 const fs = require('fs').promises;
 const pdfParse = require('pdf-parse');
 const mammoth = require('mammoth');
-// Configuration Gemini AI - Utilise le même endpoint que le frontend
+// Configuration Gemini AI - Utilise EXACTEMENT le même endpoint que le frontend
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+const GEMINI_BASE_URL = 'https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-2.5-flash-lite:streamGenerateContent';
 
 // Configuration multer pour upload CV
 const storage = multer.diskStorage({
@@ -255,7 +255,7 @@ Retourne un JSON avec cette structure exacte:
 IMPORTANT: Retourne UNIQUEMENT le JSON, sans texte avant ou après.
 `;
 
-  // Appel API Gemini avec fetch (même approche que le frontend)
+  // Appel API Gemini avec fetch (EXACTEMENT comme le frontend)
   const response = await fetch(`${GEMINI_BASE_URL}?key=${GEMINI_API_KEY}`, {
     method: 'POST',
     headers: {
@@ -263,16 +263,11 @@ IMPORTANT: Retourne UNIQUEMENT le JSON, sans texte avant ou après.
     },
     body: JSON.stringify({
       contents: [{
+        role: 'user',
         parts: [{
           text: prompt
         }]
-      }],
-      generationConfig: {
-        temperature: 0.7,
-        topK: 40,
-        topP: 0.95,
-        maxOutputTokens: 8192
-      }
+      }]
     })
   });
 
@@ -281,17 +276,45 @@ IMPORTANT: Retourne UNIQUEMENT le JSON, sans texte avant ou après.
     throw new Error(`Gemini API Error: ${JSON.stringify(errorData)}`);
   }
 
-  const data = await response.json();
+  const result = await response.json();
   
-  // Extraire le texte de la réponse
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  // Traiter le format streaming (array de chunks) comme le frontend
+  let combinedText = '';
   
-  if (!text) {
-    throw new Error('No response from Gemini API');
+  if (Array.isArray(result)) {
+    // Format streaming: concaténer tous les chunks
+    for (const chunk of result) {
+      if (chunk.candidates && chunk.candidates.length > 0) {
+        const candidate = chunk.candidates[0];
+        if (candidate.content && candidate.content.parts) {
+          for (const part of candidate.content.parts) {
+            if (part.text) {
+              combinedText += part.text;
+            }
+          }
+        }
+      }
+    }
+  } else {
+    // Format non-streaming: extraction directe
+    if (!result.candidates || result.candidates.length === 0) {
+      throw new Error('No candidates in Gemini response');
+    }
+    
+    const firstCandidate = result.candidates[0];
+    if (!firstCandidate.content || !firstCandidate.content.parts) {
+      throw new Error('No content in Gemini candidate');
+    }
+    
+    combinedText = firstCandidate.content.parts[0].text || '';
+  }
+  
+  if (!combinedText) {
+    throw new Error('Empty text in Gemini response');
   }
   
   // Nettoyer la réponse pour extraire le JSON
-  let jsonText = text.trim();
+  let jsonText = combinedText.trim();
   
   // Supprimer les balises markdown si présentes
   if (jsonText.startsWith('```json')) {

@@ -6,9 +6,9 @@ const path = require('path');
 const fs = require('fs').promises;
 const pdfParse = require('pdf-parse');
 const mammoth = require('mammoth');
-// Configuration Gemini AI - Endpoint officiel optimisé pour backend
+// Configuration Gemini AI - Endpoint v1 qui supporte les API keys
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent';
 
 // Configuration multer pour upload CV
 const storage = multer.diskStorage({
@@ -302,7 +302,99 @@ IMPORTANT: Retourne UNIQUEMENT le JSON, sans texte avant ou après.
   return parsedData;
 }
 
-// Analyser les CV avec IA
+// Fonction helper pour diviser un tableau en chunks
+function chunkArray(array, size) {
+  const chunks = [];
+  for (let i = 0; i < array.length; i += size) {
+    chunks.push(array.slice(i, i + size));
+  }
+  return chunks;
+}
+
+// Analyser un seul CV (fonction helper)
+async function analyzeSingleCV(candidateId, jobId, jobPost, partnerId) {
+  try {
+    const candidate = await Candidate.findOne({ 
+      _id: candidateId, 
+      jobPostId: jobId,
+      partnerId 
+    });
+    
+    if (!candidate) {
+      return {
+        candidateId,
+        status: 'failed',
+        error: 'Candidate not found'
+      };
+    }
+    
+    // Extraire le texte du CV
+    const filePath = path.join(__dirname, '../../uploads/cvs', path.basename(candidate.originalFileUrl));
+    let cvText;
+    
+    if (candidate.fileType === 'pdf') {
+      cvText = await extractTextFromPDF(filePath);
+    } else {
+      cvText = await extractTextFromWord(filePath);
+    }
+    
+    // Analyser avec Gemini
+    const analysisData = await analyzeCVWithGemini(cvText, jobPost);
+    
+    // Mettre à jour le candidat
+    candidate.cvData = {
+      personalInfo: analysisData.personalInfo,
+      professionalSummary: analysisData.professionalSummary,
+      experiences: analysisData.experiences,
+      education: analysisData.education,
+      skills: analysisData.skills,
+      languages: analysisData.languages,
+      certifications: analysisData.certifications || [],
+      projects: analysisData.projects || [],
+      references: analysisData.references || []
+    };
+    
+    candidate.matchingAnalysis = {
+      ...analysisData.matchingAnalysis,
+      analyzedAt: new Date()
+    };
+    
+    await candidate.save();
+    
+    // Notification si score élevé
+    if (analysisData.matchingAnalysis.globalScore >= 80) {
+      await Notification.createNotification({
+        partnerId,
+        type: 'high_score_candidate',
+        title: 'Candidat à fort potentiel',
+        message: `Un candidat avec un score de ${analysisData.matchingAnalysis.globalScore}% pour "${jobPost.title}"`,
+        priority: 'high',
+        data: {
+          jobPostId: jobPost._id,
+          candidateId: candidate._id,
+          score: analysisData.matchingAnalysis.globalScore
+        },
+        actionUrl: `/jobs/${jobPost._id}/candidates/${candidate._id}`
+      });
+    }
+    
+    return {
+      candidateId,
+      status: 'success',
+      score: analysisData.matchingAnalysis.globalScore
+    };
+    
+  } catch (error) {
+    console.error(`Error analyzing candidate ${candidateId}:`, error);
+    return {
+      candidateId,
+      status: 'failed',
+      error: error.message
+    };
+  }
+}
+
+// Analyser les CV avec IA (traitement par batch de 5)
 exports.analyzeCVs = async (req, res) => {
   try {
     const { jobId } = req.params;
@@ -327,95 +419,35 @@ exports.analyzeCVs = async (req, res) => {
     }
     
     const results = [];
-    let analyzed = 0;
-    let failed = 0;
+    const BATCH_SIZE = 5; // Traiter 5 CV en parallèle
+    const batches = chunkArray(candidateIds, BATCH_SIZE);
     
-    for (const candidateId of candidateIds) {
-      try {
-        const candidate = await Candidate.findOne({ 
-          _id: candidateId, 
-          jobPostId: jobId,
-          partnerId 
-        });
-        
-        if (!candidate) {
-          results.push({
-            candidateId,
-            status: 'failed',
-            error: 'Candidate not found'
-          });
-          failed++;
-          continue;
-        }
-        
-        // Extraire le texte du CV
-        const filePath = path.join(__dirname, '../../uploads/cvs', path.basename(candidate.originalFileUrl));
-        let cvText;
-        
-        if (candidate.fileType === 'pdf') {
-          cvText = await extractTextFromPDF(filePath);
-        } else {
-          cvText = await extractTextFromWord(filePath);
-        }
-        
-        // Analyser avec Gemini
-        const analysisData = await analyzeCVWithGemini(cvText, jobPost);
-        
-        // Mettre à jour le candidat
-        candidate.cvData = {
-          personalInfo: analysisData.personalInfo,
-          professionalSummary: analysisData.professionalSummary,
-          experiences: analysisData.experiences,
-          education: analysisData.education,
-          skills: analysisData.skills,
-          languages: analysisData.languages,
-          certifications: analysisData.certifications || [],
-          projects: analysisData.projects || [],
-          references: analysisData.references || []
-        };
-        
-        candidate.matchingAnalysis = {
-          ...analysisData.matchingAnalysis,
-          analyzedAt: new Date()
-        };
-        
-        await candidate.save();
-        
-        results.push({
-          candidateId,
-          status: 'success',
-          score: analysisData.matchingAnalysis.globalScore
-        });
-        
-        analyzed++;
-        
-        // Notification si score élevé
-        if (analysisData.matchingAnalysis.globalScore >= 80) {
-          await Notification.createNotification({
-            partnerId,
-            type: 'high_score_candidate',
-            title: 'Candidat à fort potentiel',
-            message: `Un candidat avec un score de ${analysisData.matchingAnalysis.globalScore}% pour "${jobPost.title}"`,
-            priority: 'high',
-            data: {
-              jobPostId: jobPost._id,
-              candidateId: candidate._id,
-              score: analysisData.matchingAnalysis.globalScore
-            },
-            actionUrl: `/jobs/${jobPost._id}/candidates/${candidate._id}`
-          });
-        }
-        
-      } catch (error) {
-        console.error(`Error analyzing candidate ${candidateId}:`, error);
-        results.push({
-          candidateId,
-          status: 'failed',
-          error: error.message
-        });
-        failed++;
+    console.log(`🚀 Analyse de ${candidateIds.length} CV en ${batches.length} batch(s) de ${BATCH_SIZE}`);
+    
+    // Traiter chaque batch en parallèle
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i];
+      console.log(`📦 Traitement du batch ${i + 1}/${batches.length} (${batch.length} CV)`);
+      
+      // Analyser tous les CV du batch en parallèle
+      const batchResults = await Promise.all(
+        batch.map(candidateId => analyzeSingleCV(candidateId, jobId, jobPost, partnerId))
+      );
+      
+      results.push(...batchResults);
+      
+      // Pause de 4 secondes entre chaque batch (respecter les 15 RPM de Gemini)
+      if (i < batches.length - 1) {
+        console.log('⏳ Pause de 4 secondes avant le prochain batch...');
+        await new Promise(resolve => setTimeout(resolve, 4000));
       }
     }
+    
+    // Compter les succès et échecs
+    const analyzed = results.filter(r => r.status === 'success').length;
+    const failed = results.filter(r => r.status === 'failed').length;
+    
+    console.log(`✅ Analyse terminée: ${analyzed} succès, ${failed} échecs`);
     
     return res.status(200).json({
       success: true,

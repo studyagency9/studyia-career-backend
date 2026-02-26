@@ -11,6 +11,7 @@ router.post('/job-posts/:jobId/upload-cvs', candidateController.uploadCVs);
 router.post('/job-posts/:jobId/analyze-cvs', candidateController.analyzeCVs);
 
 // Gestion des candidats
+router.get('/candidates', candidateController.getAllCandidates); // Tous les candidats du partner
 router.get('/job-posts/:jobId/candidates', candidateController.getCandidates);
 router.get('/candidates/:id', candidateController.getCandidateById);
 router.put('/candidates/:id/status', candidateController.updateCandidateStatus);

@@ -468,6 +468,117 @@ exports.analyzeCVs = async (req, res) => {
   }
 };
 
+// Récupérer tous les candidats d'un partner (tous jobs confondus)
+exports.getAllCandidates = async (req, res) => {
+  try {
+    const partnerId = req.partner.id;
+    const {
+      status,
+      page = 1,
+      limit = 20,
+      minScore,
+      maxScore,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
+      skills,
+      search
+    } = req.query;
+    
+    // Construire le filtre
+    const filter = { partnerId };
+    
+    if (status) {
+      filter.status = status;
+    }
+    
+    if (minScore || maxScore) {
+      filter['matchingAnalysis.globalScore'] = {};
+      if (minScore) filter['matchingAnalysis.globalScore'].$gte = parseInt(minScore);
+      if (maxScore) filter['matchingAnalysis.globalScore'].$lte = parseInt(maxScore);
+    }
+    
+    if (skills) {
+      const skillsArray = Array.isArray(skills) ? skills : [skills];
+      filter['matchingAnalysis.matchedSkills'] = { $in: skillsArray };
+    }
+    
+    // Recherche textuelle (nom, email)
+    if (search) {
+      filter.$or = [
+        { 'cvData.personalInfo.fullName': { $regex: search, $options: 'i' } },
+        { 'cvData.personalInfo.email': { $regex: search, $options: 'i' } }
+      ];
+    }
+    
+    // Pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const sort = { [sortBy]: sortOrder === 'desc' ? -1 : 1 };
+    
+    // Requête
+    const [candidates, total, stats] = await Promise.all([
+      Candidate.find(filter)
+        .populate('jobPostId', 'title company location')
+        .sort(sort)
+        .skip(skip)
+        .limit(parseInt(limit))
+        .select('-cvData.references -notes'),
+      
+      Candidate.countDocuments(filter),
+      
+      Candidate.aggregate([
+        { $match: { partnerId } },
+        {
+          $group: {
+            _id: null,
+            avgScore: { $avg: '$matchingAnalysis.globalScore' },
+            totalCandidates: { $sum: 1 },
+            pendingCount: {
+              $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] }
+            },
+            reviewedCount: {
+              $sum: { $cond: [{ $eq: ['$status', 'reviewed'] }, 1, 0] }
+            },
+            shortlistedCount: {
+              $sum: { $cond: [{ $eq: ['$status', 'shortlisted'] }, 1, 0] }
+            },
+            rejectedCount: {
+              $sum: { $cond: [{ $eq: ['$status', 'rejected'] }, 1, 0] }
+            }
+          }
+        }
+      ])
+    ]);
+    
+    return res.status(200).json({
+      success: true,
+      data: {
+        candidates,
+        pagination: {
+          total,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          totalPages: Math.ceil(total / parseInt(limit))
+        },
+        stats: stats[0] || {
+          avgScore: 0,
+          totalCandidates: 0,
+          pendingCount: 0,
+          reviewedCount: 0,
+          shortlistedCount: 0,
+          rejectedCount: 0
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching all candidates:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Error fetching candidates',
+      details: process.env.NODE_ENV === 'development' ? error.message : null
+    });
+  }
+};
+
 // Récupérer les candidats d'une offre
 exports.getCandidates = async (req, res) => {
   try {

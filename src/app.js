@@ -29,6 +29,7 @@ const jobPostRoutes = require('./routes/jobPost.routes'); // 🆕 Gestion des of
 const candidateRoutes = require('./routes/candidate.routes'); // 🆕 Gestion des candidatures
 const analyticsRoutes = require('./routes/analytics.routes'); // 🆕 Analytics et statistiques
 const notificationRoutes = require('./routes/notification.routes'); // 🆕 Notifications
+const gmailRoutes = require('./routes/gmail.routes'); // 🆕 Intégration Gmail API
 
 // Load environment variables
 dotenv.config();
@@ -118,6 +119,7 @@ app.use('/api/job-posts', jobPostRoutes);
 app.use('/api', candidateRoutes); // Inclut /job-posts/:jobId/upload-cvs et /candidates/:id
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/gmail', gmailRoutes); // 🆕 Intégration Gmail API
 
 // Route spécifique pour la compatibilité avec le frontend (sans 's' à cv)
 app.post('/api/cv/purchase', (req, res) => {

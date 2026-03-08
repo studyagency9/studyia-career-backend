@@ -25,7 +25,7 @@ const storage = multer.diskStorage({
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     cb(null, `cv-${uniqueSuffix}${path.extname(file.originalname)}`);
   }
-});
+}); 
 
 const upload = multer({
   storage: storage,
@@ -166,6 +166,74 @@ async function extractTextFromWord(filePath) {
 
 // Analyser un CV avec Gemini AI
 async function analyzeCVWithGemini(cvText, jobPost) {
+  // Validation stricte
+  if (!jobPost) {
+    throw new Error('JobPost is required for CV analysis');
+  }
+
+  // Construction intelligente du contexte du job
+  const jobContext = {
+    title: jobPost.title,
+    description: jobPost.description,
+    company: jobPost.company,
+    experience: jobPost.experience,
+    minYearsExperience: jobPost.minYearsExperience || 0,
+    contractType: jobPost.contractType,
+    city: jobPost.city,
+    country: jobPost.country,
+    remote: jobPost.remote
+  };
+
+  // Compétences (vérifier si non vides)
+  const hasRequiredSkills = Array.isArray(jobPost.requiredSkills) && jobPost.requiredSkills.length > 0;
+  const hasOptionalSkills = Array.isArray(jobPost.optionalSkills) && jobPost.optionalSkills.length > 0;
+  const hasEducation = Array.isArray(jobPost.education) && jobPost.education.length > 0;
+
+  // Construire la section compétences du prompt
+  let skillsSection = '';
+  if (hasRequiredSkills) {
+    skillsSection += `Compétences REQUISES: ${jobPost.requiredSkills.join(', ')}\n`;
+  }
+  if (hasOptionalSkills) {
+    skillsSection += `Compétences OPTIONNELLES: ${jobPost.optionalSkills.join(', ')}\n`;
+  }
+  if (!hasRequiredSkills && !hasOptionalSkills) {
+    skillsSection += `Compétences: À évaluer selon la description du poste\n`;
+  }
+
+  // Construire la section éducation
+  const educationLabels = {
+    'high_school': 'Baccalauréat',
+    'bachelor': 'Licence/Bachelor',
+    'master': 'Master',
+    'phd': 'Doctorat'
+  };
+  let educationSection = '';
+  if (hasEducation) {
+    const educationList = jobPost.education.map(e => educationLabels[e] || e).join(', ');
+    educationSection = `Niveau d'éducation requis: ${educationList}\n`;
+  } else {
+    educationSection = `Niveau d'éducation: À évaluer selon l'expérience\n`;
+  }
+
+  // Niveau d'expérience
+  const experienceLabels = {
+    'entry': 'Débutant (0-1 an)',
+    'junior': 'Junior (1-3 ans)',
+    'mid': 'Intermédiaire (3-5 ans)',
+    'senior': 'Senior (5-10 ans)',
+    'expert': 'Expert (10+ ans)'
+  };
+  const experienceLevel = experienceLabels[jobPost.experience] || jobPost.experience;
+
+  console.log('🔍 Analyse CV avec JobPost:', {
+    title: jobContext.title,
+    hasRequiredSkills,
+    hasOptionalSkills,
+    hasEducation,
+    experience: experienceLevel
+  });
+
   const prompt = `
 Tu es un expert en recrutement. Analyse ce CV et extrais les informations structurées suivantes au format JSON.
 
@@ -173,12 +241,15 @@ CV:
 ${cvText}
 
 OFFRE D'EMPLOI:
-Titre: ${jobPost.title}
-Compétences requises: ${jobPost.requiredSkills.join(', ')}
-Compétences optionnelles: ${jobPost.optionalSkills.join(', ')}
-Expérience: ${jobPost.experience}
-Éducation: ${jobPost.education.join(', ')}
-Années d'expérience minimum: ${jobPost.minYearsExperience}
+Titre du poste: ${jobContext.title}
+Entreprise: ${jobContext.company}
+Description: ${jobContext.description}
+Localisation: ${jobContext.city}, ${jobContext.country}${jobContext.remote ? ' (Télétravail possible)' : ''}
+Type de contrat: ${jobContext.contractType}
+
+CRITÈRES DE SÉLECTION:
+${skillsSection}${educationSection}Niveau d'expérience: ${experienceLevel}
+Années d'expérience minimum: ${jobContext.minYearsExperience} ans
 
 Retourne un JSON avec cette structure exacte:
 {
@@ -252,7 +323,54 @@ Retourne un JSON avec cette structure exacte:
   }
 }
 
-IMPORTANT: Retourne UNIQUEMENT le JSON, sans texte avant ou après.
+INSTRUCTIONS POUR LE MATCHING:
+1. **globalScore**: Score global de 0 à 100 basé sur l'adéquation globale avec le poste
+   - Compare les compétences du CV avec celles requises/optionnelles (si spécifiées)
+   - Compare l'expérience du candidat avec le niveau requis
+   - Compare l'éducation du candidat avec le niveau requis (si spécifié)
+   - Évalue la cohérence du profil avec la description du poste
+
+2. **skillsScore**: Score de 0 à 100 pour les compétences
+   - Si des compétences REQUISES sont spécifiées: évalue le % de compétences possédées
+   - Si aucune compétence spécifiée: évalue les compétences par rapport à la description du poste
+   - Bonus pour les compétences optionnelles
+
+3. **experienceScore**: Score de 0 à 100 pour l'expérience
+   - Compare les années d'expérience du candidat avec le minimum requis
+   - Évalue la pertinence des expériences passées avec le poste
+   - Niveau requis: ${experienceLevel} (${jobContext.minYearsExperience}+ ans)
+
+4. **educationScore**: Score de 0 à 100 pour l'éducation
+   ${hasEducation ? `- Niveau requis: ${jobPost.education.map(e => educationLabels[e] || e).join(', ')}` : '- Évalue l\'éducation par rapport aux exigences du poste'}
+   - Considère aussi l'expérience compensatoire
+
+5. **matchedSkills**: Liste des compétences du candidat qui correspondent aux exigences
+6. **missingSkills**: Liste des compétences requises manquantes (si spécifiées)
+7. **strengths**: 2-3 points forts du candidat pour ce poste
+8. **weaknesses**: 2-3 points faibles ou axes d'amélioration
+9. **recommendation**: Recommandation claire (Fortement recommandé / Recommandé / À considérer / Non recommandé)
+
+IMPORTANT - RÈGLES DE SCORING STRICTES: 
+- **TOUS les scores doivent être des nombres entre 0 et 100**
+- **NE JAMAIS mettre 0 par défaut** - évalue toujours l'adéquation réelle
+- Le globalScore doit refléter une vraie adéquation basée sur l'analyse complète
+- Échelle de scoring:
+  * 90-100: Candidat exceptionnel, dépasse largement les exigences
+  * 75-89: Excellent candidat, correspond très bien au poste
+  * 60-74: Bon candidat, correspond bien avec quelques manques mineurs
+  * 45-59: Candidat moyen, correspond partiellement
+  * 30-44: Candidat faible, manque plusieurs compétences clés
+  * 0-29: Ne correspond pas du tout au poste
+
+EXEMPLE DE SCORING:
+- Si le candidat a 6/8 compétences requises → skillsScore = 75
+- Si le candidat a 5 ans d'expérience pour un poste senior (5+ ans) → experienceScore = 85
+- Si le candidat a un Master pour un poste qui demande un Master → educationScore = 100
+
+**CALCUL DU GLOBAL SCORE:**
+globalScore = (skillsScore × 0.4) + (experienceScore × 0.3) + (educationScore × 0.3)
+
+Retourne UNIQUEMENT le JSON, sans texte avant ou après.
 `;
 
   // Appel API Gemini (non-streaming, optimisé backend)
@@ -288,6 +406,9 @@ IMPORTANT: Retourne UNIQUEMENT le JSON, sans texte avant ou après.
     throw new Error('Empty text in Gemini response');
   }
   
+  console.log('📥 Réponse brute de Gemini (premiers 500 chars):', text.substring(0, 500));
+  console.log('📏 Taille totale de la réponse:', text.length, 'caractères');
+  
   // Nettoyer la réponse pour extraire le JSON
   let jsonText = text.trim();
   
@@ -299,6 +420,35 @@ IMPORTANT: Retourne UNIQUEMENT le JSON, sans texte avant ou après.
   }
   
   const parsedData = JSON.parse(jsonText);
+  
+  // Validation stricte du matchingAnalysis
+  if (!parsedData.matchingAnalysis) {
+    console.error('❌ matchingAnalysis manquant dans la réponse Gemini');
+    console.error('📄 Réponse parsée:', JSON.stringify(parsedData, null, 2).substring(0, 500));
+    throw new Error('matchingAnalysis is missing from Gemini response');
+  }
+  
+  // Vérifier que les scores sont présents et valides
+  const ma = parsedData.matchingAnalysis;
+  if (typeof ma.globalScore !== 'number' || ma.globalScore === 0) {
+    console.warn('⚠️ globalScore invalide ou à 0:', ma.globalScore);
+  }
+  if (typeof ma.skillsScore !== 'number' || ma.skillsScore === 0) {
+    console.warn('⚠️ skillsScore invalide ou à 0:', ma.skillsScore);
+  }
+  if (typeof ma.experienceScore !== 'number' || ma.experienceScore === 0) {
+    console.warn('⚠️ experienceScore invalide ou à 0:', ma.experienceScore);
+  }
+  
+  console.log('✅ matchingAnalysis validé:', {
+    globalScore: ma.globalScore,
+    skillsScore: ma.skillsScore,
+    experienceScore: ma.experienceScore,
+    educationScore: ma.educationScore,
+    matchedSkills: ma.matchedSkills?.length || 0,
+    missingSkills: ma.missingSkills?.length || 0
+  });
+  
   return parsedData;
 }
 
@@ -314,6 +464,20 @@ function chunkArray(array, size) {
 // Analyser un seul CV (fonction helper)
 async function analyzeSingleCV(candidateId, jobId, jobPost, partnerId) {
   try {
+    console.log(`📄 Analyse du candidat ${candidateId} pour le job ${jobId}`);
+    
+    // Vérifier que jobPost est bien défini
+    if (!jobPost) {
+      console.error('❌ JobPost est undefined dans analyzeSingleCV');
+      return {
+        candidateId,
+        status: 'failed',
+        error: 'JobPost is undefined'
+      };
+    }
+
+    console.log(`✅ JobPost trouvé: ${jobPost.title} (ID: ${jobPost._id})`);
+
     const candidate = await Candidate.findOne({ 
       _id: candidateId, 
       jobPostId: jobId,
@@ -321,12 +485,15 @@ async function analyzeSingleCV(candidateId, jobId, jobPost, partnerId) {
     });
     
     if (!candidate) {
+      console.error(`❌ Candidat ${candidateId} non trouvé`);
       return {
         candidateId,
         status: 'failed',
         error: 'Candidate not found'
       };
     }
+    
+    console.log(`✅ Candidat trouvé: ${candidate.originalFileName}`);
     
     // Extraire le texte du CV
     const filePath = path.join(__dirname, '../../uploads/cvs', path.basename(candidate.originalFileUrl));
@@ -337,6 +504,8 @@ async function analyzeSingleCV(candidateId, jobId, jobPost, partnerId) {
     } else {
       cvText = await extractTextFromWord(filePath);
     }
+    
+    console.log(`✅ Texte extrait: ${cvText.length} caractères`);
     
     // Analyser avec Gemini
     const analysisData = await analyzeCVWithGemini(cvText, jobPost);
@@ -401,15 +570,22 @@ exports.analyzeCVs = async (req, res) => {
     const { candidateIds } = req.body;
     const partnerId = req.partner.id;
     
+    console.log(`🎯 Début de l'analyse pour le job ${jobId}, partner ${partnerId}`);
+    
     // Vérifier que le job appartient au partner
     const jobPost = await JobPost.findOne({ _id: jobId, partnerId });
     
     if (!jobPost) {
+      console.error(`❌ Job post ${jobId} non trouvé pour le partner ${partnerId}`);
       return res.status(404).json({
         success: false,
         error: 'Job post not found'
       });
     }
+    
+    console.log(`✅ Job post trouvé: "${jobPost.title}"`);
+    console.log(`📊 Compétences requises: ${jobPost.requiredSkills?.length || 0}`);
+    console.log(`📊 Compétences optionnelles: ${jobPost.optionalSkills?.length || 0}`);
     
     if (!candidateIds || !Array.isArray(candidateIds) || candidateIds.length === 0) {
       return res.status(400).json({

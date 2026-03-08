@@ -373,28 +373,71 @@ globalScore = (skillsScore × 0.4) + (experienceScore × 0.3) + (educationScore 
 Retourne UNIQUEMENT le JSON, sans texte avant ou après.
 `;
 
-  // Appel API Gemini (non-streaming, optimisé backend)
-  const response = await fetch(`${GEMINI_BASE_URL}?key=${GEMINI_API_KEY}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      contents: [{
-        parts: [{
-          text: prompt
-        }]
-      }]
-    })
-  });
+  // Appel API Gemini avec retry automatique (non-streaming, optimisé backend)
+  const maxRetries = 3;
+  let lastError;
+  let result;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      if (attempt > 1) {
+        const waitTime = Math.pow(2, attempt - 1) * 1000; // Backoff exponentiel: 2s, 4s, 8s
+        console.log(`⏳ Tentative ${attempt}/${maxRetries} après ${waitTime}ms...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+      
+      const response = await fetch(`${GEMINI_BASE_URL}?key=${GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: prompt
+            }]
+          }],
+          generationConfig: {
+            temperature: 0.2,
+            topK: 40,
+            topP: 0.95,
+            maxOutputTokens: 8192
+          }
+        })
+      });
 
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(`Gemini API Error: ${JSON.stringify(errorData)}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        const errorData = JSON.parse(errorText);
+        
+        // Si erreur 503 (service unavailable) ou 429 (rate limit), on retry
+        if (errorData.error?.code === 503 || errorData.error?.code === 429) {
+          console.warn(`⚠️ Gemini temporairement indisponible (${errorData.error.code}), tentative ${attempt}/${maxRetries}`);
+          lastError = new Error(`Gemini API Error: ${errorText}`);
+          continue; // Retry
+        }
+        
+        // Pour les autres erreurs, on throw immédiatement
+        throw new Error(`Gemini API Error: ${errorText}`);
+      }
+      
+      // Succès
+      result = await response.json();
+      console.log(`✅ Gemini API répondu avec succès (tentative ${attempt}/${maxRetries})`);
+      break; // Succès, on sort de la boucle
+      
+    } catch (error) {
+      lastError = error;
+      if (attempt === maxRetries) {
+        console.error(`❌ Échec après ${maxRetries} tentatives`);
+      }
+    }
   }
 
-  const result = await response.json();
-  
+  if (!result) {
+    throw lastError || new Error('Failed to get response from Gemini API');
+  }
+
   // Extraction simple (format non-streaming)
   if (!result.candidates || result.candidates.length === 0) {
     throw new Error('No candidates in Gemini response');

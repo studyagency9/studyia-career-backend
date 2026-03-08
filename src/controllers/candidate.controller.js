@@ -348,7 +348,11 @@ INSTRUCTIONS POUR LE MATCHING:
 6. **missingSkills**: Liste des compétences requises manquantes (si spécifiées)
 7. **strengths**: 2-3 points forts du candidat pour ce poste
 8. **weaknesses**: 2-3 points faibles ou axes d'amélioration
-9. **recommendation**: Recommandation claire (Fortement recommandé / Recommandé / À considérer / Non recommandé)
+9. **recommendation**: Recommandation DÉTAILLÉE (2-3 phrases) expliquant pourquoi le candidat est adapté ou non au poste
+   - Exemples:
+     * "Fortement recommandé. Le candidat possède toutes les compétences requises et une expérience solide dans le domaine. Son profil correspond parfaitement aux exigences du poste."
+     * "Recommandé avec réserves. Le candidat a de bonnes bases mais manque d'expérience en [compétence X]. Une formation complémentaire pourrait combler ces lacunes."
+     * "Non recommandé. Le candidat ne possède pas les compétences clés requises et son expérience est insuffisante pour ce niveau de poste."
 
 IMPORTANT - RÈGLES DE SCORING STRICTES: 
 - **TOUS les scores doivent être des nombres entre 0 et 100**
